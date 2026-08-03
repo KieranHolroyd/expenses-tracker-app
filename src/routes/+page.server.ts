@@ -8,6 +8,30 @@ import { parse } from 'csv-parse/sync';
 type Profile = { id: number; name: string; avatar_color: string };
 const cycleTypes: PaymentCycleType[] = ['four_week', 'monthly', 'last_friday'];
 
+function expenseFields(form: FormData) {
+	const name = String(form.get('name') ?? '').trim();
+	const category = String(form.get('category') ?? '').trim();
+	const amount = Number(form.get('amount'));
+	const cadence = String(form.get('cadence'));
+	const nextDueDate = String(form.get('next_due_date'));
+	const valid =
+		name.length > 0 &&
+		category.length > 0 &&
+		Number.isFinite(amount) &&
+		amount > 0 &&
+		['Monthly', 'Yearly'].includes(cadence) &&
+		/^\d{4}-\d{2}-\d{2}$/.test(nextDueDate);
+
+	return {
+		valid,
+		name,
+		category,
+		amountPence: Math.round(amount * 100),
+		cadence,
+		nextDueDate
+	};
+}
+
 function requireProfile(cookies: { get: (name: string) => string | undefined }) {
 	const id = Number(cookies.get('ledgerly_profile'));
 	const profile = Number.isInteger(id)
@@ -37,26 +61,45 @@ export const load: PageServerLoad = ({ url, cookies }) => {
 export const actions: Actions = {
 	add: async ({ request, cookies }) => {
 		const profile = requireProfile(cookies);
-		const form = await request.formData();
-		const name = String(form.get('name') ?? '').trim();
-		const category = String(form.get('category') ?? '').trim();
-		const amount = Number(form.get('amount'));
-		const cadence = String(form.get('cadence'));
-		const dueDate = String(form.get('next_due_date'));
-		if (
-			!name ||
-			!category ||
-			!Number.isFinite(amount) ||
-			amount <= 0 ||
-			!['Monthly', 'Yearly'].includes(cadence) ||
-			!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)
-		) {
+		const fields = expenseFields(await request.formData());
+		if (!fields.valid) {
 			return fail(400, { message: 'Please complete every field with a valid value.' });
 		}
 		db.prepare(
 			'INSERT INTO expenses (profile_id, name, category, amount_pence, cadence, next_due_date) VALUES (?, ?, ?, ?, ?, ?)'
-		).run(profile.id, name, category, Math.round(amount * 100), cadence, dueDate);
+		).run(
+			profile.id,
+			fields.name,
+			fields.category,
+			fields.amountPence,
+			fields.cadence,
+			fields.nextDueDate
+		);
 		return { success: true };
+	},
+	edit: async ({ request, cookies }) => {
+		const profile = requireProfile(cookies);
+		const form = await request.formData();
+		const id = Number(form.get('id'));
+		const fields = expenseFields(form);
+		if (!Number.isInteger(id) || !fields.valid) {
+			return fail(400, { message: 'Please complete every field with a valid value.' });
+		}
+		const result = db
+			.prepare(
+				'UPDATE expenses SET name = ?, category = ?, amount_pence = ?, cadence = ?, next_due_date = ? WHERE id = ? AND profile_id = ?'
+			)
+			.run(
+				fields.name,
+				fields.category,
+				fields.amountPence,
+				fields.cadence,
+				fields.nextDueDate,
+				id,
+				profile.id
+			);
+		if (!result.changes) return fail(404, { message: 'That expense could not be found.' });
+		return { message: `${fields.name} updated.` };
 	},
 	toggle: async ({ request, cookies }) => {
 		const profile = requireProfile(cookies);

@@ -9,7 +9,8 @@
 		type SortingState,
 		type Updater
 	} from '@tanstack/table-core';
-	import { ArrowUpDown, CirclePause, Ellipsis, Search, Trash2 } from '@lucide/svelte';
+	import { ArrowUpDown, CirclePause, Ellipsis, Pencil, Search, Trash2 } from '@lucide/svelte';
+	import AddExpenseDialog from '$lib/components/AddExpenseDialog.svelte';
 	import { expensePalette, money, monthlyCost, shortDate } from '$lib/format';
 	import type { Expense } from '$lib/types';
 	import { Badge } from '$lib/components/ui/badge';
@@ -30,6 +31,8 @@
 	let pageCount = $state(0);
 	let canPreviousPage = $state(false);
 	let canNextPage = $state(false);
+	let editingExpense = $state<Expense | null>(null);
+	let showEdit = $state(false);
 	let categories = $derived([
 		'All categories',
 		...new Set(expenses.map((expense) => expense.category))
@@ -84,6 +87,11 @@
 
 	function submit(action: 'toggle' | 'delete', id: number) {
 		(document.getElementById(`${action}-${id}`) as HTMLFormElement | null)?.requestSubmit();
+	}
+
+	function edit(expense: Expense) {
+		editingExpense = expense;
+		showEdit = true;
 	}
 </script>
 
@@ -167,6 +175,7 @@
 								class="hover:bg-muted grid size-8 place-items-center rounded-md"
 								aria-label="Actions for {expense.name}"><Ellipsis size={18} /></DropdownMenu.Trigger
 							><DropdownMenu.Content align="end"
+								><DropdownMenu.Item onclick={() => edit(expense)}><Pencil />Edit</DropdownMenu.Item
 								><DropdownMenu.Item onclick={() => submit('toggle', expense.id)}
 									><CirclePause />{expense.active ? 'Pause' : 'Resume'}</DropdownMenu.Item
 								><DropdownMenu.Item
@@ -204,3 +213,9 @@
 		</div>
 	</div>
 </Card.Root>
+
+{#if editingExpense}
+	{#key editingExpense.id}
+		<AddExpenseDialog bind:open={showEdit} expense={editingExpense} />
+	{/key}
+{/if}

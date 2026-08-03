@@ -1,27 +1,41 @@
 <script lang="ts">
-	import { Plus } from '@lucide/svelte';
+	import { Pencil, Plus } from '@lucide/svelte';
+	import type { Expense } from '$lib/types';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Field from '$lib/components/ui/field';
 	import { Input } from '$lib/components/ui/input';
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import * as Select from '$lib/components/ui/select';
-	let { open = $bindable() }: { open: boolean } = $props();
+	let { open = $bindable(), expense }: { open: boolean; expense?: Expense } = $props();
 	let category = $state('Software');
 	let cadence = $state('Monthly');
+	let editing = $derived(Boolean(expense));
+
+	$effect(() => {
+		if (open) {
+			category = expense?.category ?? 'Software';
+			cadence = expense?.cadence ?? 'Monthly';
+		}
+	});
 </script>
 
 <Dialog.Root bind:open>
 	<Dialog.Content class="sm:max-w-xl">
 		<Dialog.Header
 			><p class="text-coral text-[11px] font-extrabold tracking-[.16em] uppercase">
-				New recurring cost
+				{editing ? 'Update recurring cost' : 'New recurring cost'}
 			</p>
-			<Dialog.Title class="font-serif text-2xl">Add an expense</Dialog.Title><Dialog.Description
-				>Add a subscription, service, or recurring bill to your forecast.</Dialog.Description
+			<Dialog.Title class="font-serif text-2xl"
+				>{editing ? 'Edit expense' : 'Add an expense'}</Dialog.Title
+			><Dialog.Description
+				>{editing
+					? 'Update the details used in your recurring-cost forecast.'
+					: 'Add a subscription, service, or recurring bill to your forecast.'}</Dialog.Description
 			></Dialog.Header
 		>
-		<form method="POST" action="?/add">
+		<form method="POST" action={editing ? '?/edit' : '?/add'}>
+			{#if expense}<input type="hidden" name="id" value={expense.id} />{/if}
 			<Field.Group class="grid grid-cols-2 gap-5 max-sm:grid-cols-1">
 				<Field.Field class="col-span-2 max-sm:col-span-1">
 					<Field.Label for="expense-name">Name</Field.Label><Input
@@ -29,6 +43,7 @@
 						name="name"
 						required
 						placeholder="e.g. Spotify"
+						value={expense?.name ?? ''}
 					/>
 				</Field.Field>
 				<Field.Field>
@@ -43,6 +58,7 @@
 							step="0.01"
 							required
 							placeholder="12.99"
+							value={expense ? (expense.amount_pence / 100).toFixed(2) : ''}
 						/></InputGroup.Root
 					>
 				</Field.Field>
@@ -70,7 +86,7 @@
 						name="next_due_date"
 						type="date"
 						required
-						value="2026-08-12"
+						value={expense?.next_due_date ?? new Date().toISOString().slice(0, 10)}
 					/>
 				</Field.Field>
 			</Field.Group>
@@ -78,7 +94,9 @@
 				><Dialog.Close
 					>{#snippet child({ props })}<Button variant="outline" {...props}>Cancel</Button
 						>{/snippet}</Dialog.Close
-				><Button type="submit"><Plus /> Add expense</Button></Dialog.Footer
+				><Button type="submit"
+					>{#if editing}<Pencil /> Save changes{:else}<Plus /> Add expense{/if}</Button
+				></Dialog.Footer
 			>
 		</form>
 	</Dialog.Content>
