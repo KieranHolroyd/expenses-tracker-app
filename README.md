@@ -28,19 +28,35 @@ Use `pnpm format` to apply Prettier formatting.
 
 ## Docker
 
-Start Ledgerly with a persistent SQLite volume:
-
-```bash
-docker compose up -d
-```
-
-The application is available at `http://localhost:3000`. SQLite data is stored in the
-`ledgerly-data` volume and survives container replacement. Set `ORIGIN` to the public HTTPS URL
-when running behind a domain:
+Start the production image with a persistent SQLite volume:
 
 ```bash
 ORIGIN=https://expenses.example.com docker compose up -d
 ```
+
+The service listens on `127.0.0.1:3000` by default, ready for a TLS-terminating reverse proxy.
+SQLite data is stored in the `ledgerly-data` volume and survives container replacement. `ORIGIN`
+is required and must be the public URL users visit.
+
+Update the container without removing its database volume:
+
+```bash
+ORIGIN=https://expenses.example.com docker compose pull
+ORIGIN=https://expenses.example.com docker compose up -d
+```
+
+Do not use `docker compose down -v` during an update: `-v` explicitly deletes the database
+volume. Run `pnpm check:persistence` to verify that the configured database path is backed by the
+named volume.
+
+To publish the service directly on every network interface, override the bind address:
+
+```bash
+ORIGIN=https://expenses.example.com LEDGERLY_BIND_ADDRESS=0.0.0.0 docker compose up -d
+```
+
+`LEDGERLY_PORT` changes the host port. `LEDGERLY_IMAGE` can pin a release or digest instead of
+using `latest`, which is recommended for repeatable deployments.
 
 To use the published image directly:
 

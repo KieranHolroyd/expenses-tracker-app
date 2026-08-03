@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import db, { type Expense } from '$lib/server/db';
+import { advancePastDueExpenses } from '$lib/server/due-dates';
 import { buildUsage } from '$lib/server/forecast';
 import type { AppSettings, PaymentCycleType } from '$lib/types';
 import type { Actions, PageServerLoad } from './$types';
@@ -45,6 +46,7 @@ function requireProfile(cookies: { get: (name: string) => string | undefined }) 
 export const load: PageServerLoad = ({ url, cookies }) => {
 	if (url.pathname === '/') redirect(307, '/profiles');
 	const profile = requireProfile(cookies);
+	advancePastDueExpenses(db, profile.id);
 	const expenses = db
 		.prepare(
 			'SELECT * FROM expenses WHERE profile_id = ? ORDER BY active DESC, next_due_date ASC, name ASC'
