@@ -1,0 +1,15 @@
+services:
+  ledgerly:
+    image: ghcr.io/kieranholroyd/expenses-tracker-app:latest
+    build:
+      context: .
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      ORIGIN: ${ORIGIN:-http://localhost:3000}
+    volumes:
+      - ledgerly-data:/data
+
+volumes:
+  ledgerly-data:
