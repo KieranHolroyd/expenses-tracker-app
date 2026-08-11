@@ -10,7 +10,33 @@ pnpm seed
 pnpm dev
 ```
 
-The SQLite database is created at `data/expenses.db`. The seed command is idempotent and restores the starter recurring-expense rows without deleting user-added data.
+With no Turso credentials set, the app falls back to a local SQLite file at `data/expenses.db`, so
+development needs no setup. The seed command is idempotent and restores the starter
+recurring-expense rows without deleting user-added data.
+
+## Database
+
+Ledgerly stores its data in [Turso](https://turso.tech) over libSQL. Create a database and a token:
+
+```bash
+turso db create ledgerly
+turso db show ledgerly --url
+turso db tokens create ledgerly
+```
+
+Put the results in `.env` (see `.env.example`):
+
+```bash
+TURSO_DATABASE_URL=libsql://ledgerly-yourname.turso.io
+TURSO_AUTH_TOKEN=...
+```
+
+Both variables are required in production. The app refuses to start without `TURSO_DATABASE_URL`
+when `NODE_ENV=production`, rather than silently falling back to container-local storage that
+disappears on the next restart. Schema migrations run automatically on first use.
+
+To point any command at the remote database instead of the local file, export the same two
+variables first — `pnpm seed` and `pnpm dev` both honour them.
 
 ## Data import
 

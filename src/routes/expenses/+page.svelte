@@ -2,6 +2,7 @@
 	import { Check, Plus } from '@lucide/svelte';
 	import AddExpenseDialog from '$lib/components/AddExpenseDialog.svelte';
 	import CategoryBreakdown from '$lib/components/CategoryBreakdown.svelte';
+	import CsvExport from '$lib/components/CsvExport.svelte';
 	import CsvImport from '$lib/components/CsvImport.svelte';
 	import ExpenseTable from '$lib/components/ExpenseTable.svelte';
 	import SummaryCards from '$lib/components/SummaryCards.svelte';
@@ -30,12 +31,12 @@
 		</p>
 	</div>
 	<div class="flex gap-2.5">
-		<CsvImport /><Button size="lg" onclick={() => (showAdd = true)}
+		<CsvExport /><CsvImport /><Button size="lg" onclick={() => (showAdd = true)}
 			><Plus size={18} /> Add expense</Button
 		>
 	</div>
 </section>
-<SummaryCards expenses={data.expenses} />
+<SummaryCards stats={data.stats} />
 <section class="grid grid-cols-[minmax(0,1fr)_310px] items-start gap-5 max-xl:grid-cols-1">
 	<ExpenseTable expenses={data.expenses} /><CategoryBreakdown expenses={data.expenses} />
 </section>

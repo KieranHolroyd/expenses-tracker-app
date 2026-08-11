@@ -12,6 +12,14 @@ export const fullDate = (value: string) =>
 	);
 export const monthlyCost = (expense: Expense) =>
 	expense.cadence === 'Yearly' ? expense.amount_pence / 12 : expense.amount_pence;
+export const annualCost = (expense: Expense) =>
+	expense.cadence === 'Yearly' ? expense.amount_pence : expense.amount_pence * 12;
+export const percent = (fraction: number, digits = 0) =>
+	new Intl.NumberFormat('en-GB', {
+		style: 'percent',
+		minimumFractionDigits: digits,
+		maximumFractionDigits: digits
+	}).format(Number.isFinite(fraction) ? fraction : 0);
 export const expensePalette: Record<string, string> = {
 	Software: '#5968c5',
 	Infrastructure: '#de735c',

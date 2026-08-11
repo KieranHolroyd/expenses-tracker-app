@@ -3,8 +3,7 @@
 FROM node:22-alpine AS base
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-RUN apk add --no-cache python3 make g++ \
-	&& corepack enable \
+RUN corepack enable \
 	&& corepack prepare pnpm@9.7.1 --activate
 WORKDIR /app
 
@@ -23,7 +22,6 @@ FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=3000
-ENV LEDGERLY_DATA_DIR=/data
 WORKDIR /app
 
 RUN apk add --no-cache libstdc++
@@ -32,9 +30,7 @@ COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_m
 COPY --from=build --chown=node:node /app/build ./build
 COPY --chown=node:node package.json ./package.json
 
-RUN mkdir -p /data && chown node:node /data
 USER node
-VOLUME ["/data"]
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

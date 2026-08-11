@@ -25,8 +25,8 @@
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@tailwindcss/vite": "^4.3.3",
-		"@types/better-sqlite3": "^9.6.0",
 		"@types/d3": "^7.4.3",
+		"@types/node": "^26.2.0",
 		"bits-ui": "^2.16.3",
 		"clsx": "^2.1.1",
 		"eslint": "^10.8.0",
@@ -50,9 +50,9 @@
 	},
 	"packageManager": "pnpm@9.7.1+sha512.faf344af2d6ca65c4c5c8c2224ea77a81a5e8859cbc4e06b1511ddce2f0151512431dd19e6aff31f2c6a8f5f2aced9bd2273e1fed7dd4de1868984059d2c4247",
 	"dependencies": {
+		"@libsql/client": "^0.17.4",
 		"@lucide/svelte": "^1.28.0",
 		"@tanstack/table-core": "^8.21.3",
-		"better-sqlite3": "^13.0.2",
 		"csv-parse": "^7.0.2",
 		"d3": "^7.9.0"
 	}

@@ -1,5 +1,5 @@
 import { fail, redirect, type Cookies } from '@sveltejs/kit';
-import db from '$lib/server/db';
+import { pluck, query, queryOne, transaction } from '$lib/server/db';
 import type { Profile } from '$lib/types';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -25,15 +25,15 @@ function selectProfile(cookies: Cookies, id: number) {
 	});
 }
 
-export const load: PageServerLoad = () => ({
-	profiles: db.prepare('SELECT id, name, avatar_color FROM profiles ORDER BY id').all() as Profile[]
+export const load: PageServerLoad = async () => ({
+	profiles: await query<Profile>('SELECT id, name, avatar_color FROM profiles ORDER BY id')
 });
 
 export const actions: Actions = {
 	select: async ({ request, cookies }) => {
 		const id = Number((await request.formData()).get('id'));
 		const profile = Number.isInteger(id)
-			? db.prepare('SELECT id FROM profiles WHERE id = ?').get(id)
+			? await queryOne<Pick<Profile, 'id'>>('SELECT id FROM profiles WHERE id = ?', [id])
 			: undefined;
 		if (!profile) return fail(404, { message: 'That profile no longer exists.' });
 		selectProfile(cookies, id);
@@ -45,22 +45,24 @@ export const actions: Actions = {
 			return fail(400, { message: 'Profile names must be between 1 and 24 characters.' });
 		}
 
-		const count = Number(db.prepare('SELECT COUNT(*) FROM profiles').pluck().get());
+		const count = Number((await pluck<number>('SELECT COUNT(*) FROM profiles')) ?? 0);
 		if (count >= MAX_PROFILES) {
 			return fail(400, { message: `You can create up to ${MAX_PROFILES} profiles.` });
 		}
 
 		try {
-			const id = db.transaction(() => {
-				const result = db
-					.prepare('INSERT INTO profiles (name, avatar_color) VALUES (?, ?)')
-					.run(name, COLORS[count % COLORS.length]);
-				const profileId = Number(result.lastInsertRowid);
-				db.prepare(
-					"INSERT INTO app_settings (profile_id, payment_amount_pence, payday_anchor_date, cycle_days, cycle_type) VALUES (?, 200000, ?, 28, 'four_week')"
-				).run(profileId, new Date().toISOString().slice(0, 10));
+			const id = await transaction(async (tx) => {
+				const inserted = await tx.execute({
+					sql: 'INSERT INTO profiles (name, avatar_color) VALUES (?, ?) RETURNING id',
+					args: [name, COLORS[count % COLORS.length]]
+				});
+				const profileId = Number(inserted.rows[0].id);
+				await tx.execute({
+					sql: "INSERT INTO app_settings (profile_id, payment_amount_pence, payday_anchor_date, cycle_days, cycle_type) VALUES (?, 200000, ?, 28, 'four_week')",
+					args: [profileId, new Date().toISOString().slice(0, 10)]
+				});
 				return profileId;
-			})();
+			});
 			selectProfile(cookies, id);
 		} catch (error) {
 			if (error instanceof Error && error.message.includes('UNIQUE')) {

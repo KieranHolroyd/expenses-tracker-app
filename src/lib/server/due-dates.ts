@@ -1,4 +1,5 @@
-import type Database from 'better-sqlite3';
+import type { InStatement } from '@libsql/client';
+import { batch, query } from './db';
 
 export const iso = (date: Date) => date.toISOString().slice(0, 10);
 
@@ -12,6 +13,15 @@ export function addMonths(date: Date, months: number) {
 	const lastDay = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
 	next.setUTCDate(Math.min(day, lastDay));
 	return next;
+}
+
+/** The given day within a calendar month, clamped to the final day of shorter months. */
+export function dateForMonth(year: number, month: number, day: number) {
+	const first = new Date(Date.UTC(year, month, 1));
+	const lastDay = new Date(
+		Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)
+	).getUTCDate();
+	return new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), Math.min(day, lastDay)));
 }
 
 export function startOfTodayUtc(today = new Date()) {
@@ -36,29 +46,24 @@ type PastDueExpense = {
 	cadence: 'Monthly' | 'Yearly';
 };
 
-export function advancePastDueExpenses(
-	db: Database.Database,
-	profileId: number,
-	today = new Date()
-) {
+export async function advancePastDueExpenses(profileId: number, today = new Date()) {
 	const todayIso = iso(startOfTodayUtc(today));
-	const rows = db
-		.prepare(
-			`SELECT id, next_due_date, cadence FROM expenses
-			 WHERE profile_id = ? AND active = 1 AND next_due_date < ?`
-		)
-		.all(profileId, todayIso) as PastDueExpense[];
-
-	if (rows.length === 0) return;
-
-	const update = db.prepare(
-		'UPDATE expenses SET next_due_date = ? WHERE id = ? AND profile_id = ?'
+	const rows = await query<PastDueExpense>(
+		`SELECT id, next_due_date, cadence FROM expenses
+		 WHERE profile_id = ? AND active = 1 AND next_due_date < ?`,
+		[profileId, todayIso]
 	);
 
-	db.transaction(() => {
-		for (const row of rows) {
-			const next = nextDueOnOrAfter(row.next_due_date, row.cadence, today);
-			if (next !== row.next_due_date) update.run(next, row.id, profileId);
+	const updates: InStatement[] = [];
+	for (const row of rows) {
+		const next = nextDueOnOrAfter(row.next_due_date, row.cadence, today);
+		if (next !== row.next_due_date) {
+			updates.push({
+				sql: 'UPDATE expenses SET next_due_date = ? WHERE id = ? AND profile_id = ?',
+				args: [next, row.id, profileId]
+			});
 		}
-	})();
+	}
+
+	await batch(updates);
 }

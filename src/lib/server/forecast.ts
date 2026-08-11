@@ -1,16 +1,8 @@
 import type { AppSettings, Expense, UsageForecast, UsagePoint } from '$lib/types';
-import { addMonths, iso, utcDate } from './due-dates';
+import { addMonths, dateForMonth, iso, utcDate } from './due-dates';
 
 const DAY_MS = 86_400_000;
 const FORECAST_CYCLES = 13;
-
-function dateForMonth(year: number, month: number, day: number) {
-	const first = new Date(Date.UTC(year, month, 1));
-	const lastDay = new Date(
-		Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)
-	).getUTCDate();
-	return new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), Math.min(day, lastDay)));
-}
 
 function lastFriday(year: number, month: number) {
 	const lastDay = new Date(Date.UTC(year, month + 1, 0));

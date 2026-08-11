@@ -1,10 +1,16 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { LayoutDashboard, ReceiptText, TrendingUp } from '@lucide/svelte';
+	import { ChartPie, LayoutDashboard, ReceiptText, TrendingUp } from '@lucide/svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
 	import * as Tabs from '$lib/components/ui/tabs';
-	let active = $derived(page.url.pathname.startsWith('/usage') ? 'usage' : 'expenses');
+	let active = $derived(
+		page.url.pathname.startsWith('/usage')
+			? 'usage'
+			: page.url.pathname.startsWith('/insights')
+				? 'insights'
+				: 'expenses'
+	);
 	let profile = $derived(page.data.profile);
 </script>
 
@@ -22,6 +28,7 @@
 	<Tabs.Root value={active} onValueChange={(value) => goto(`/${value}`)}
 		><Tabs.List class="bg-[#ebe8df]" aria-label="Main navigation"
 			><Tabs.Trigger value="expenses"><LayoutDashboard size={17} /> Expenses</Tabs.Trigger
+			><Tabs.Trigger value="insights"><ChartPie size={17} /> Insights</Tabs.Trigger
 			><Tabs.Trigger value="usage"><TrendingUp size={17} /> Usage</Tabs.Trigger></Tabs.List
 		></Tabs.Root
 	>
