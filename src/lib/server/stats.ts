@@ -141,7 +141,9 @@ export function buildStats(
 	const annual = active.reduce((sum, expense) => sum + annualCost(expense), 0);
 	const annualCosts = active.map(annualCost).toSorted((a, b) => b - a);
 	const monthlyCosts = active.map(monthlyCost);
-	const mean = monthlyCosts.length ? monthlyCosts.reduce((a, b) => a + b, 0) / monthlyCosts.length : 0;
+	const mean = monthlyCosts.length
+		? monthlyCosts.reduce((a, b) => a + b, 0) / monthlyCosts.length
+		: 0;
 	const byAnnual = active.toSorted((a, b) => annualCost(b) - annualCost(a));
 
 	const cycles = periodsPerYear(settings);
@@ -161,9 +163,7 @@ export function buildStats(
 			.reduce((sum, charge) => sum + charge.amount, 0);
 	};
 
-	const hhi = annual
-		? annualCosts.reduce((sum, cost) => sum + (cost / annual) ** 2, 0)
-		: 0;
+	const hhi = annual ? annualCosts.reduce((sum, cost) => sum + (cost / annual) ** 2, 0) : 0;
 	const renewalCharges = upcomingCharges.filter((charge) => charge.cadence === 'Yearly');
 
 	return {

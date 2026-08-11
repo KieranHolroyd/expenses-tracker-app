@@ -1,6 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { InStatement } from '@libsql/client';
-import { batch, execute, query, queryOne } from '$lib/server/db';
+import { batch, execute, queryOne, rewriteStorage } from '$lib/server/db';
 import {
 	PASSCODE_PATTERN,
 	newDataKey,
@@ -9,6 +9,7 @@ import {
 	wrapDataKey
 } from '$lib/server/crypto';
 import { advancePastDueExpenses } from '$lib/server/due-dates';
+import { expensesFor } from '$lib/server/expenses';
 import { buildUsage } from '$lib/server/forecast';
 import {
 	clearFailures,
@@ -25,7 +26,6 @@ import {
 	openSettings,
 	sealExpense,
 	sealPaymentAmount,
-	type ExpenseRow,
 	type SettingsRow
 } from '$lib/server/secure';
 import { buildStats } from '$lib/server/stats';
@@ -366,6 +366,7 @@ export const actions: Actions = {
 		);
 		// One transaction: the rows and the key that opens them can never disagree.
 		await batch(statements);
+		await rewriteStorage();
 
 		forgetProfileSessions(record.id);
 		clearFailures(record.id);

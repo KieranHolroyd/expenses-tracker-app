@@ -1,8 +1,8 @@
 import { expensesToCsv, exportFilename } from '$lib/server/csv';
 import { advancePastDueExpenses } from '$lib/server/due-dates';
+import { expensesFor } from '$lib/server/expenses';
 import { requireUnlockedProfile } from '$lib/server/profile';
 import { openExpenses } from '$lib/server/secure';
-import { expensesFor } from '../../+page.server';
 import type { RequestHandler } from './$types';
 
 /** Note that the download itself is plaintext CSV, whatever the profile's passcode state. */

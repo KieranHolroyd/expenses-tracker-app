@@ -49,7 +49,8 @@
 			</Card.Header>
 			<Card.Content>
 				<div class="flex items-baseline gap-3">
-					<strong class="font-serif text-4xl tracking-tight">{percent(income.committedShare, 1)}</strong
+					<strong class="font-serif text-4xl tracking-tight"
+						>{percent(income.committedShare, 1)}</strong
 					>
 					<span class="text-muted-foreground text-xs"
 						>of {money(income.annual)} across {income.periodsPerYear} payments</span
@@ -77,7 +78,9 @@
 					>
 				</Card.Header>
 				<Card.Content>
-					<strong class="font-serif text-3xl tracking-tight">{money(cadenceMix.yearlyBilled)}</strong>
+					<strong class="font-serif text-3xl tracking-tight"
+						>{money(cadenceMix.yearlyBilled)}</strong
+					>
 					<p class="text-muted-foreground mt-2 text-xs">
 						{percent(cadenceMix.yearlyShare)} of the annual total, charged in lump sums
 					</p>

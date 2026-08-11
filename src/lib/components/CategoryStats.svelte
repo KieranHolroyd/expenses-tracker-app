@@ -78,7 +78,8 @@
 					<Table.Cell><b>All categories</b></Table.Cell>
 					<Table.Cell class="text-right tabular-nums">{stats.counts.active}</Table.Cell>
 					<Table.Cell class="text-right tabular-nums">{money(totals.monthly)}</Table.Cell>
-					<Table.Cell class="text-right font-semibold tabular-nums">{money(totals.annual)}</Table.Cell
+					<Table.Cell class="text-right font-semibold tabular-nums"
+						>{money(totals.annual)}</Table.Cell
 					>
 					<Table.Cell class="max-lg:hidden"></Table.Cell>
 				</Table.Row>

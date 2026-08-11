@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Table2 } from '@lucide/svelte';
-	import { fullDate, money, percent } from '$lib/format';
+	import { money, percent } from '$lib/format';
 	import type { ExpenseStats } from '$lib/types';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
@@ -32,12 +32,7 @@
 					heavier than the {money(average)} average.
 				</p>
 			</div>
-			<Button
-				variant="outline"
-				size="sm"
-				class="shrink-0"
-				onclick={() => (showTable = !showTable)}
-			>
+			<Button variant="outline" size="sm" class="shrink-0" onclick={() => (showTable = !showTable)}>
 				<Table2 class="size-3.5" />{showTable ? 'Hide table' : 'View as table'}
 			</Button>
 		</div>
@@ -60,7 +55,7 @@
 
 		<div class="relative pl-16 max-sm:pl-12">
 			<div
-				class="absolute top-0 left-0 flex h-[260px] flex-col justify-between text-[10px] tabular-nums text-[#929995] max-sm:h-[200px]"
+				class="absolute top-0 left-0 flex h-[260px] flex-col justify-between text-[10px] text-[#929995] tabular-nums max-sm:h-[200px]"
 			>
 				<span>{money(scaleMax)}</span><span>{money(scaleMax / 2)}</span><span>£0</span>
 			</div>
@@ -75,7 +70,7 @@
 						style:bottom={height(average, scaleMax)}
 					>
 						<span
-							class="absolute -top-4 left-0 rounded bg-white pr-1 text-[10px] font-semibold tabular-nums text-[#66706b]"
+							class="absolute -top-4 left-0 rounded bg-white pr-1 text-[10px] font-semibold text-[#66706b] tabular-nums"
 							>avg {money(average)}</span
 						>
 					</div>
@@ -91,7 +86,9 @@
 							onmouseleave={() => (hovered = null)}
 							onfocus={() => (hovered = index)}
 							onblur={() => (hovered = null)}
-							aria-label="{month.label} {month.year}: {money(month.total)} across {month.count} charges"
+							aria-label="{month.label} {month.year}: {money(
+								month.total
+							)} across {month.count} charges"
 						>
 							{#if month.total > 0}
 								<!-- The stack takes an explicit share of the column so its segments
@@ -117,7 +114,7 @@
 								</div>
 								{#if month === peak}
 									<span
-										class="absolute inset-x-0 text-center text-[10px] font-bold tabular-nums text-[#4a534e]"
+										class="absolute inset-x-0 text-center text-[10px] font-bold text-[#4a534e] tabular-nums"
 										style:bottom={`calc(${height(month.total, scaleMax)} + 6px)`}
 										>{money(month.total)}</span
 									>
@@ -164,9 +161,13 @@
 				{/if}
 			</div>
 
+			<!-- min-w-0 keeps each label the same width as its bar slot; on narrow
+			     screens every other label is hidden rather than left to collide. -->
 			<div class="mt-3 flex gap-1 text-[10px] text-[#929995]">
-				{#each months as month (month.key)}
-					<span class="flex-1 text-center">{month.label}</span>
+				{#each months as month, index (month.key)}
+					<span class="min-w-0 flex-1 text-center {index % 2 ? 'max-sm:invisible' : ''}"
+						>{month.label}</span
+					>
 				{/each}
 			</div>
 		</div>

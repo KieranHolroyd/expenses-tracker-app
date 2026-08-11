@@ -1,7 +1,8 @@
 import { query } from './db';
 import type { ExpenseRow } from './secure';
 
-const COLUMNS = 'id, profile_id, name, category, amount_pence, cadence, next_due_date, active, secret';
+const COLUMNS =
+	'id, profile_id, name, category, amount_pence, cadence, next_due_date, active, secret';
 
 /**
  * Still ordered in SQL for unencrypted profiles; `openExpenses` re-sorts, because

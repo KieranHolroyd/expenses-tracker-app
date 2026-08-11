@@ -63,16 +63,14 @@
 					<span class="text-muted-foreground text-xs">top three</span>
 				</div>
 				<div>
-					<b class="block font-serif text-xl"
-						>{concentration.effectiveCount.toFixed(1)}</b
-					>
+					<b class="block font-serif text-xl">{concentration.effectiveCount.toFixed(1)}</b>
 					<span class="text-muted-foreground text-xs">effective count</span>
 				</div>
 			</div>
 			<p class="text-muted-foreground text-xs leading-relaxed">
 				Your {counts.active} expenses behave like
-				<b class="text-foreground">{concentration.effectiveCount.toFixed(1)} equal ones</b>. The lower
-				that number, the more cancelling a single line would move the total.
+				<b class="text-foreground">{concentration.effectiveCount.toFixed(1)} equal ones</b>. The
+				lower that number, the more cancelling a single line would move the total.
 			</p>
 		</div>
 

@@ -3,7 +3,9 @@
 	import { page } from '$app/state';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	let { children } = $props();
-	let choosingProfile = $derived(page.url.pathname === '/profiles');
+	// The profile picker and the lock screen are full-bleed: neither has a profile
+	// whose data the header is allowed to show.
+	let standalone = $derived(['/profiles', '/unlock'].includes(page.url.pathname));
 </script>
 
 <svelte:head>
@@ -15,7 +17,7 @@
 	<meta name="theme-color" content="#f5f2ea" />
 </svelte:head>
 
-{#if choosingProfile}
+{#if standalone}
 	{@render children()}
 {:else}
 	<div class="bg-paper text-ink min-h-screen">

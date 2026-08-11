@@ -50,9 +50,8 @@
 								>{/if}
 						</span>
 						<span class="text-muted-foreground shrink-0 text-xs tabular-nums">
-							{away <= 0 ? 'today' : `in ${away}d`} · <b class="text-foreground"
-								>{money(charge.amount)}</b
-							>
+							{away <= 0 ? 'today' : `in ${away}d`} ·
+							<b class="text-foreground">{money(charge.amount)}</b>
 						</span>
 					</li>
 				{:else}

@@ -1,9 +1,14 @@
 import { fail, redirect, type Cookies } from '@sveltejs/kit';
-import { pluck, query, queryOne, transaction } from '$lib/server/db';
-import type { Profile } from '$lib/types';
+import { pluck, query, transaction } from '$lib/server/db';
+import { endUnlockSession } from '$lib/server/lock';
+import {
+	findProfile,
+	publicProfile,
+	PROFILE_COOKIE,
+	type ProfileRecord
+} from '$lib/server/profile';
 import type { Actions, PageServerLoad } from './$types';
 
-const PROFILE_COOKIE = 'ledgerly_profile';
 const MAX_PROFILES = 8;
 const COLORS = [
 	'#de735c',
@@ -26,18 +31,23 @@ function selectProfile(cookies: Cookies, id: number) {
 }
 
 export const load: PageServerLoad = async () => ({
-	profiles: await query<Profile>('SELECT id, name, avatar_color FROM profiles ORDER BY id')
+	profiles: (
+		await query<ProfileRecord>(
+			'SELECT id, name, avatar_color, passcode_salt, passcode_key FROM profiles ORDER BY id'
+		)
+	).map(publicProfile)
 });
 
 export const actions: Actions = {
 	select: async ({ request, cookies }) => {
 		const id = Number((await request.formData()).get('id'));
-		const profile = Number.isInteger(id)
-			? await queryOne<Pick<Profile, 'id'>>('SELECT id FROM profiles WHERE id = ?', [id])
-			: undefined;
+		const profile = await findProfile(id);
 		if (!profile) return fail(404, { message: 'That profile no longer exists.' });
+		// Switching profiles drops any unlock session, so a protected profile is
+		// never left open behind someone else's pick.
+		endUnlockSession(cookies);
 		selectProfile(cookies, id);
-		redirect(303, '/expenses');
+		redirect(303, profile.passcode_key ? '/unlock' : '/expenses');
 	},
 	create: async ({ request, cookies }) => {
 		const name = String((await request.formData()).get('name') ?? '').trim();
@@ -63,6 +73,7 @@ export const actions: Actions = {
 				});
 				return profileId;
 			});
+			endUnlockSession(cookies);
 			selectProfile(cookies, id);
 		} catch (error) {
 			if (error instanceof Error && error.message.includes('UNIQUE')) {

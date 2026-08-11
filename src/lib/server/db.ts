@@ -44,9 +44,9 @@ function resolveConfig() {
 let connection: { client: Client; url: string } | undefined;
 
 /**
- * Connected on first query rather than on import. SvelteKit's build-time route
- * analysis imports this module with NODE_ENV=production, and that must not have
- * to satisfy — or connect with — real database credentials.
+ * Connected on first query rather than on import, because SvelteKit's build-time
+ * route analysis imports this module with NODE_ENV=production. Building must not
+ * require real credentials, let alone reach the database.
  */
 function connect() {
 	if (!connection) {
@@ -106,6 +106,23 @@ export async function batch(statements: InStatement[]) {
 	if (!statements.length) return [];
 	await ready();
 	return getClient().batch(statements, 'write');
+}
+
+/**
+ * Rewrites the database file so that overwritten rows do not survive in freed
+ * pages or the write-ahead log — the difference between data being unreadable
+ * and being unreadable unless someone runs `strings` over the file. Best effort:
+ * a hosted Turso database manages its own storage and may refuse both statements.
+ */
+export async function rewriteStorage() {
+	await ready();
+	for (const sql of ['PRAGMA wal_checkpoint(TRUNCATE)', 'VACUUM']) {
+		try {
+			await getClient().execute(sql);
+		} catch {
+			// Not permitted on this connection; the rows themselves are still encrypted.
+		}
+	}
 }
 
 /** For writes that need to read a result before deciding the next statement. */

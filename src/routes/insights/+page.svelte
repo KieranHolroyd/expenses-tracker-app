@@ -37,7 +37,9 @@
 	<MonthlyProjection stats={data.stats} />
 </section>
 
-<section class="mb-5 grid grid-cols-[minmax(0,1fr)_minmax(0,380px)] items-start gap-5 max-xl:grid-cols-1">
+<section
+	class="mb-5 grid grid-cols-[minmax(0,1fr)_minmax(0,380px)] items-start gap-5 max-xl:grid-cols-1"
+>
 	<SpendDistribution stats={data.stats} />
 	<RenewalSchedule stats={data.stats} />
 </section>

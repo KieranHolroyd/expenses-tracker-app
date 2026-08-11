@@ -71,7 +71,10 @@ export function recordFailure(profileId: number) {
 	const record = attempts.get(profileId) ?? { failures: 0, blockedUntil: 0 };
 	record.failures += 1;
 	if (record.failures > FREE_ATTEMPTS) {
-		const delay = Math.min(BASE_DELAY_MS * 2 ** (record.failures - FREE_ATTEMPTS - 1), MAX_DELAY_MS);
+		const delay = Math.min(
+			BASE_DELAY_MS * 2 ** (record.failures - FREE_ATTEMPTS - 1),
+			MAX_DELAY_MS
+		);
 		record.blockedUntil = Date.now() + delay;
 	}
 	attempts.set(profileId, record);

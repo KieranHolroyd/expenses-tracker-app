@@ -38,6 +38,22 @@ disappears on the next restart. Schema migrations run automatically on first use
 To point any command at the remote database instead of the local file, export the same two
 variables first — `pnpm seed` and `pnpm dev` both honour them.
 
+### Moving existing data to Turso
+
+`pnpm migrate:turso` copies `data/expenses.db` into the database named by `TURSO_DATABASE_URL`:
+
+```bash
+export TURSO_DATABASE_URL=$(turso db show ledgerly --url)
+export TURSO_AUTH_TOKEN=$(turso db tokens create ledgerly)
+pnpm migrate:turso
+```
+
+It creates the schema first, copies only the columns both databases share, and refuses to run if
+the target already holds data unless you pass `--force`.
+
+`turso dev --db-file local.db` runs a libSQL server locally if you want to exercise the remote
+code path without a network round trip.
+
 ## Data import
 
 Use **Import CSV** on the Expenses page. Ledgerly accepts the original recurring-expenses sheet export or a conventional CSV with `Description` and `Amount` columns. Optional columns include `Date`, `Category`, `Type`, and `Recurring Period`.
@@ -54,26 +70,29 @@ Use `pnpm format` to apply Prettier formatting.
 
 ## Docker
 
-Start the production image with a persistent SQLite volume:
+The container keeps no local state — all data lives in Turso, so `ORIGIN`,
+`TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are all required:
 
 ```bash
-ORIGIN=https://expenses.example.com docker compose up -d
+ORIGIN=https://expenses.example.com \
+TURSO_DATABASE_URL=libsql://ledgerly-yourname.turso.io \
+TURSO_AUTH_TOKEN=... \
+docker compose up -d
 ```
 
-The service listens on `127.0.0.1:3000` by default, ready for a TLS-terminating reverse proxy.
-SQLite data is stored in the `ledgerly-data` volume and survives container replacement. `ORIGIN`
-is required and must be the public URL users visit.
+Compose reads these from a local `.env` file too, which is easier than exporting them on every
+command. The service listens on `127.0.0.1:3000` by default, ready for a TLS-terminating reverse
+proxy, and runs with a read-only root filesystem.
 
-Update the container without removing its database volume:
+Updating is just a pull and recreate — there is no volume to preserve:
 
 ```bash
-ORIGIN=https://expenses.example.com docker compose pull
-ORIGIN=https://expenses.example.com docker compose up -d
+docker compose pull
+docker compose up -d
 ```
 
-Do not use `docker compose down -v` during an update: `-v` explicitly deletes the database
-volume. Run `pnpm check:persistence` to verify that the configured database path is backed by the
-named volume.
+Run `pnpm check:persistence` to verify Compose passes real Turso credentials rather than falling
+back to storage that disappears with the container.
 
 To publish the service directly on every network interface, override the bind address:
 
@@ -92,7 +111,8 @@ docker run -d \
   --restart unless-stopped \
   -p 3000:3000 \
   -e ORIGIN=http://localhost:3000 \
-  -v ledgerly-data:/data \
+  -e TURSO_DATABASE_URL=libsql://ledgerly-yourname.turso.io \
+  -e TURSO_AUTH_TOKEN=... \
   ghcr.io/kieranholroyd/expenses-tracker-app:latest
 ```
 
