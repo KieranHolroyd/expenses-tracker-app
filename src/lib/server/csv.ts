@@ -11,7 +11,8 @@ export const exportHeaders = [
 	'Amount',
 	'Recurring Period',
 	'Next Charge',
-	'Status'
+	'Status',
+	'Necessity'
 ];
 
 const escape = (value: string) =>
@@ -24,7 +25,8 @@ export function expensesToCsv(expenses: Expense[]) {
 		(expense.amount_pence / 100).toFixed(2),
 		expense.cadence,
 		expense.next_due_date,
-		expense.active ? 'Active' : 'Paused'
+		expense.active ? 'Active' : 'Paused',
+		expense.required ? 'Required' : 'Optional'
 	]);
 	return [exportHeaders, ...rows].map((row) => row.map(escape).join(',')).join('\r\n') + '\r\n';
 }

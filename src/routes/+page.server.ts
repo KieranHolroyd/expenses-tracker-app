@@ -1,5 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { InStatement } from '@libsql/client';
+import { AiError, aiConfigured, categoriseExpenses } from '$lib/server/ai';
 import { batch, execute, queryOne, rewriteStorage } from '$lib/server/db';
 import {
 	PASSCODE_PATTERN,
@@ -8,9 +9,9 @@ import {
 	unwrapDataKey,
 	wrapDataKey
 } from '$lib/server/crypto';
-import { advancePastDueExpenses } from '$lib/server/due-dates';
 import { expensesFor } from '$lib/server/expenses';
 import { buildUsage } from '$lib/server/forecast';
+import { loadLedger } from '$lib/server/ledger';
 import {
 	clearFailures,
 	endUnlockSession,
@@ -41,9 +42,13 @@ function expenseFields(form: FormData) {
 	const amount = Number(form.get('amount'));
 	const cadence = String(form.get('cadence'));
 	const nextDueDate = String(form.get('next_due_date'));
+	// Categories are free text now that the picker lets people invent their own,
+	// so the only rule left is that one has to fit on a badge.
 	const valid =
 		name.length > 0 &&
+		name.length <= 80 &&
 		category.length > 0 &&
+		category.length <= 32 &&
 		Number.isFinite(amount) &&
 		amount > 0 &&
 		['Monthly', 'Yearly'].includes(cadence) &&
@@ -55,7 +60,10 @@ function expenseFields(form: FormData) {
 		category,
 		amountPence: Math.round(amount * 100),
 		cadence,
-		nextDueDate
+		nextDueDate,
+		// An unticked checkbox sends nothing at all, so absence is what marks an
+		// expense optional — which is also the default for anything never touched.
+		required: form.get('required') ? 1 : 0
 	};
 }
 
@@ -66,6 +74,7 @@ type ImportedExpense = {
 	cadence: 'Monthly' | 'Yearly';
 	next_due_date: string;
 	active: number;
+	required: number;
 };
 
 /** The same identity the unique index gives an unencrypted charge. */
@@ -74,22 +83,14 @@ const chargeKey = (expense: { name: string; next_due_date: string; amount_pence:
 
 export const load: PageServerLoad = async ({ url, cookies }) => {
 	if (url.pathname === '/') redirect(307, '/profiles');
-	const { profile, key } = await requireUnlockedProfile(cookies);
-	await advancePastDueExpenses(profile.id);
-	const expenses = openExpenses(key, await expensesFor(profile.id));
-	const settings = openSettings(
-		key,
-		(await queryOne<SettingsRow>(
-			'SELECT payment_amount_pence, payday_anchor_date, cycle_days, cycle_type, secret FROM app_settings WHERE profile_id = ?',
-			[profile.id]
-		))!
-	);
+	const { profile, expenses, settings } = await loadLedger(cookies);
 	return {
 		expenses,
 		usage: buildUsage(expenses, settings),
 		stats: buildStats(expenses, settings),
 		settings,
-		profile
+		profile,
+		aiEnabled: aiConfigured()
 	};
 };
 
@@ -106,7 +107,7 @@ export const actions: Actions = {
 			amount_pence: fields.amountPence
 		});
 		await execute(
-			'INSERT INTO expenses (profile_id, name, category, amount_pence, secret, cadence, next_due_date) VALUES (?, ?, ?, ?, ?, ?, ?)',
+			'INSERT INTO expenses (profile_id, name, category, amount_pence, secret, cadence, next_due_date, required) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
 			[
 				profile.id,
 				sealed.name,
@@ -114,7 +115,8 @@ export const actions: Actions = {
 				sealed.amount_pence,
 				sealed.secret,
 				fields.cadence,
-				fields.nextDueDate
+				fields.nextDueDate,
+				fields.required
 			]
 		);
 		return { success: true };
@@ -133,7 +135,7 @@ export const actions: Actions = {
 			amount_pence: fields.amountPence
 		});
 		const result = await execute(
-			'UPDATE expenses SET name = ?, category = ?, amount_pence = ?, secret = ?, cadence = ?, next_due_date = ? WHERE id = ? AND profile_id = ?',
+			'UPDATE expenses SET name = ?, category = ?, amount_pence = ?, secret = ?, cadence = ?, next_due_date = ?, required = ? WHERE id = ? AND profile_id = ?',
 			[
 				sealed.name,
 				sealed.category,
@@ -141,6 +143,7 @@ export const actions: Actions = {
 				sealed.secret,
 				fields.cadence,
 				fields.nextDueDate,
+				fields.required,
 				id,
 				profile.id
 			]
@@ -148,12 +151,61 @@ export const actions: Actions = {
 		if (!result.rowsAffected) return fail(404, { message: 'That expense could not be found.' });
 		return { message: `${fields.name} updated.` };
 	},
+	/**
+	 * Two model calls, deliberately: one to decide the category set for the whole
+	 * list, then one to file each expense under it. Only the rows the model both
+	 * answered for and actually moved are written.
+	 */
+	categorise: async ({ cookies }) => {
+		const { profile, key } = await requireUnlockedProfile(cookies);
+		const expenses = openExpenses(key, await expensesFor(profile.id));
+		if (!expenses.length) return fail(400, { message: 'There are no expenses to categorise yet.' });
+
+		let result;
+		try {
+			result = await categoriseExpenses(expenses);
+		} catch (error) {
+			if (error instanceof AiError) return fail(502, { message: error.message });
+			throw error;
+		}
+
+		const byId = new Map(expenses.map((expense) => [expense.id, expense]));
+		const statements: InStatement[] = result.changes.map(({ id, to }) => {
+			const expense = byId.get(id)!;
+			const sealed = sealExpense(key, { ...expense, category: to });
+			return {
+				sql: 'UPDATE expenses SET name = ?, category = ?, amount_pence = ?, secret = ? WHERE id = ? AND profile_id = ?',
+				args: [sealed.name, sealed.category, sealed.amount_pence, sealed.secret, id, profile.id]
+			};
+		});
+		await batch(statements);
+
+		const skipped = result.skipped ? `, ${result.skipped} left unchanged` : '';
+		return {
+			categories: result.categories,
+			changes: result.changes,
+			message: result.changes.length
+				? `${result.changes.length} of ${expenses.length} expenses recategorised across ${result.categories.length} categories${skipped}.`
+				: `Categories already match what the model suggested${skipped}.`
+		};
+	},
 	toggle: async ({ request, cookies }) => {
 		const { profile } = await requireUnlockedProfile(cookies);
 		const id = Number((await request.formData()).get('id'));
 		if (!Number.isInteger(id)) return fail(400);
 		await execute(
 			'UPDATE expenses SET active = CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id = ? AND profile_id = ?',
+			[id, profile.id]
+		);
+		return { success: true };
+	},
+	/** Required is a plaintext column like `active`, so this needs no data key. */
+	toggleRequired: async ({ request, cookies }) => {
+		const { profile } = await requireUnlockedProfile(cookies);
+		const id = Number((await request.formData()).get('id'));
+		if (!Number.isInteger(id)) return fail(400);
+		await execute(
+			'UPDATE expenses SET required = CASE required WHEN 1 THEN 0 ELSE 1 END WHERE id = ? AND profile_id = ?',
 			[id, profile.id]
 		);
 		return { success: true };
@@ -197,6 +249,7 @@ export const actions: Actions = {
 		const cadenceIndex = indexOf('recurring period', 'cadence', 'frequency');
 		const typeIndex = indexOf('type');
 		const statusIndex = indexOf('status', 'active');
+		const necessityIndex = indexOf('necessity', 'required');
 		const dateIndices = headers
 			.map((header, index) =>
 				header === 'date' || header === 'next charge' || header === 'next_due_date' ? index : -1
@@ -221,13 +274,18 @@ export const actions: Actions = {
 			// Our own exports carry a Status column, so a round trip keeps paused rows paused.
 			const status = statusIndex >= 0 ? row[statusIndex]?.toLowerCase().trim() : undefined;
 			const active = status && ['paused', 'inactive', 'no', 'false', '0'].includes(status) ? 0 : 1;
+			// Optional unless the file says otherwise, matching the column's default.
+			const necessity = necessityIndex >= 0 ? row[necessityIndex]?.toLowerCase().trim() : undefined;
+			const required =
+				necessity && ['required', 'essential', 'yes', 'true', '1'].includes(necessity) ? 1 : 0;
 			const parsed: ImportedExpense = {
 				name,
-				category: row[categoryIndex]?.trim() || 'Other',
+				category: row[categoryIndex]?.trim().slice(0, 32) || 'Other',
 				amount_pence: Math.round(amount * 100),
 				cadence,
 				next_due_date: date,
-				active
+				active,
+				required
 			};
 			incoming.set(chargeKey(parsed), parsed);
 		}
@@ -250,11 +308,18 @@ export const actions: Actions = {
 				statements.push(
 					id
 						? {
-								sql: 'UPDATE expenses SET secret = ?, cadence = ?, active = ? WHERE id = ? AND profile_id = ?',
-								args: [sealed.secret, parsed.cadence, parsed.active, id, profile.id]
+								sql: 'UPDATE expenses SET secret = ?, cadence = ?, active = ?, required = ? WHERE id = ? AND profile_id = ?',
+								args: [
+									sealed.secret,
+									parsed.cadence,
+									parsed.active,
+									parsed.required,
+									id,
+									profile.id
+								]
 							}
 						: {
-								sql: 'INSERT INTO expenses (profile_id, name, category, amount_pence, secret, cadence, next_due_date, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+								sql: 'INSERT INTO expenses (profile_id, name, category, amount_pence, secret, cadence, next_due_date, active, required) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
 								args: [
 									profile.id,
 									null,
@@ -263,17 +328,18 @@ export const actions: Actions = {
 									sealed.secret,
 									parsed.cadence,
 									parsed.next_due_date,
-									parsed.active
+									parsed.active,
+									parsed.required
 								]
 							}
 				);
 			}
 		} else {
 			const upsert = `
-				INSERT INTO expenses (profile_id, name, category, amount_pence, cadence, next_due_date, active)
-				VALUES (?, ?, ?, ?, ?, ?, ?)
+				INSERT INTO expenses (profile_id, name, category, amount_pence, cadence, next_due_date, active, required)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(profile_id, name, next_due_date, amount_pence) WHERE secret IS NULL
-				DO UPDATE SET category = excluded.category, cadence = excluded.cadence, active = excluded.active
+				DO UPDATE SET category = excluded.category, cadence = excluded.cadence, active = excluded.active, required = excluded.required
 			`;
 			for (const parsed of incoming.values()) {
 				statements.push({
@@ -285,7 +351,8 @@ export const actions: Actions = {
 						parsed.amount_pence,
 						parsed.cadence,
 						parsed.next_due_date,
-						parsed.active
+						parsed.active,
+						parsed.required
 					]
 				});
 			}

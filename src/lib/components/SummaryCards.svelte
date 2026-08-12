@@ -33,6 +33,15 @@
 			><strong class="font-serif text-4xl tracking-tight">{money(stats.totals.annual)}</strong>
 			<p class="text-muted-foreground mt-2 text-xs">
 				{money(stats.totals.daily)} a day · {percent(stats.income.committedShare)} of take-home pay
+			</p>
+			<p class="text-muted-foreground mt-1 text-xs">
+				{#if stats.commitment.requiredCount}
+					{money(stats.commitment.required)} of it required ({percent(
+						stats.commitment.requiredShare
+					)})
+				{:else}
+					none of it marked required yet
+				{/if}
 			</p></Card.Content
 		><Card.Footer
 			><Button href="/insights" variant="ghost" class="flex w-full justify-between"

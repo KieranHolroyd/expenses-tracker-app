@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { expensePalette, money, monthlyCost } from '$lib/format';
+	import { categoryColor, money, monthlyCost } from '$lib/format';
 	import type { Expense } from '$lib/types';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
@@ -30,17 +30,14 @@
 		{#each categories as [name, amount] (name)}<div>
 				<div class="mb-1.5 grid grid-cols-[1fr_auto] text-xs">
 					<span class="flex items-center gap-2"
-						><i
-							class="size-2 rounded-full"
-							style:background={expensePalette[name] ?? expensePalette.Other}
-						></i>{name}</span
+						><i class="size-2 rounded-full" style:background={categoryColor(name)}></i>{name}</span
 					><b>{money(amount)}</b>
 				</div>
 				<div class="h-1.5 overflow-hidden rounded-full bg-[#eeeae2]">
 					<div
 						class="h-full rounded-full"
 						style:width={`${(amount / monthly) * 100}%`}
-						style:background={expensePalette[name] ?? expensePalette.Other}
+						style:background={categoryColor(name)}
 					></div>
 				</div>
 			</div>{/each}

@@ -9,9 +9,20 @@
 		type SortingState,
 		type Updater
 	} from '@tanstack/table-core';
-	import { ArrowUpDown, CirclePause, Ellipsis, Pencil, Search, Trash2 } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
+	import {
+		ArrowUpDown,
+		ChartLine,
+		CirclePause,
+		Ellipsis,
+		Lock,
+		LockOpen,
+		Pencil,
+		Search,
+		Trash2
+	} from '@lucide/svelte';
 	import AddExpenseDialog from '$lib/components/AddExpenseDialog.svelte';
-	import { expensePalette, money, monthlyCost, shortDate } from '$lib/format';
+	import { categoryColor, categorySlug, money, monthlyCost, shortDate } from '$lib/format';
 	import type { Expense } from '$lib/types';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -21,10 +32,11 @@
 	import * as Select from '$lib/components/ui/select';
 	import * as Table from '$lib/components/ui/table';
 
-	let { expenses }: { expenses: Expense[] } = $props();
+	let { expenses, categories = [] }: { expenses: Expense[]; categories?: string[] } = $props();
 	let query = $state('');
 	let category = $state('All categories');
 	let cadence = $state('All cadences');
+	let necessity = $state('Required & optional');
 	let sorting = $state<SortingState>([]);
 	let pagination = $state<PaginationState>({ pageIndex: 0, pageSize: 10 });
 	let rows = $state<any[]>([]);
@@ -33,7 +45,7 @@
 	let canNextPage = $state(false);
 	let editingExpense = $state<Expense | null>(null);
 	let showEdit = $state(false);
-	let categories = $derived([
+	let filterOptions = $derived([
 		'All categories',
 		...new Set(expenses.map((expense) => expense.category))
 	]);
@@ -43,7 +55,9 @@
 				(expense.name.toLowerCase().includes(query.toLowerCase()) ||
 					expense.category.toLowerCase().includes(query.toLowerCase())) &&
 				(category === 'All categories' || expense.category === category) &&
-				(cadence === 'All cadences' || expense.cadence === cadence)
+				(cadence === 'All cadences' || expense.cadence === cadence) &&
+				(necessity === 'Required & optional' ||
+					(necessity === 'Required') === Boolean(expense.required))
 		)
 	);
 
@@ -85,7 +99,7 @@
 		canNextPage = table.getCanNextPage();
 	});
 
-	function submit(action: 'toggle' | 'delete', id: number) {
+	function submit(action: 'toggle' | 'toggleRequired' | 'delete', id: number) {
 		(document.getElementById(`${action}-${id}`) as HTMLFormElement | null)?.requestSubmit();
 	}
 
@@ -113,7 +127,7 @@
 			>
 			<Select.Root type="single" bind:value={category}
 				><Select.Trigger class="min-w-36">{category}</Select.Trigger><Select.Content
-					>{#each categories as item (item)}<Select.Item value={item}>{item}</Select.Item
+					>{#each filterOptions as item (item)}<Select.Item value={item}>{item}</Select.Item
 						>{/each}</Select.Content
 				></Select.Root
 			>
@@ -122,6 +136,14 @@
 					><Select.Item value="All cadences">All cadences</Select.Item><Select.Item value="Monthly"
 						>Monthly</Select.Item
 					><Select.Item value="Yearly">Yearly</Select.Item></Select.Content
+				></Select.Root
+			>
+			<Select.Root type="single" bind:value={necessity}
+				><Select.Trigger class="min-w-40">{necessity}</Select.Trigger><Select.Content
+					><Select.Item value="Required & optional">Required &amp; optional</Select.Item
+					><Select.Item value="Required">Required</Select.Item><Select.Item value="Optional"
+						>Optional</Select.Item
+					></Select.Content
 				></Select.Root
 			>
 		</div>
@@ -147,21 +169,33 @@
 				{@const expense = row.original}
 				<Table.Row class={expense.active ? '' : 'opacity-50'}>
 					<Table.Cell
-						><div class="flex items-center gap-2.5">
+						><a
+							class="text-ink flex items-center gap-2.5 no-underline"
+							href="/insights/expenses/{expense.id}"
+						>
 							<span
 								class="grid size-8 place-items-center rounded-lg font-extrabold"
-								style:color={expensePalette[expense.category] ?? expensePalette.Other}
-								style:background={`color-mix(in srgb, ${expensePalette[expense.category] ?? expensePalette.Other} 15%, white)`}
+								style:color={categoryColor(expense.category)}
+								style:background={`color-mix(in srgb, ${categoryColor(expense.category)} 15%, white)`}
 								>{expense.name.slice(0, 1)}</span
 							>
 							<div>
-								<b class="block text-[13px]">{expense.name}</b>{#if !expense.active}<small
-										class="text-muted-foreground">Paused</small
-									>{/if}
+								<span class="flex items-center gap-1.5"
+									><b class="text-[13px] hover:underline">{expense.name}</b
+									>{#if expense.required}<Badge
+											variant="outline"
+											class="h-4 gap-1 px-1.5 text-[9px] font-bold tracking-wider uppercase"
+											><Lock class="size-2.5" />Required</Badge
+										>{/if}</span
+								>{#if !expense.active}<small class="text-muted-foreground">Paused</small>{/if}
 							</div>
-						</div></Table.Cell
+						</a></Table.Cell
 					>
-					<Table.Cell><Badge variant="secondary">{expense.category}</Badge></Table.Cell>
+					<Table.Cell
+						><a href="/insights/categories/{categorySlug(expense.category)}" class="no-underline"
+							><Badge variant="secondary" class="hover:bg-accent">{expense.category}</Badge></a
+						></Table.Cell
+					>
 					<Table.Cell>{shortDate(expense.next_due_date)}</Table.Cell>
 					<Table.Cell>{expense.cadence}</Table.Cell>
 					<Table.Cell class="text-right"
@@ -175,7 +209,11 @@
 								class="hover:bg-muted grid size-8 place-items-center rounded-md"
 								aria-label="Actions for {expense.name}"><Ellipsis size={18} /></DropdownMenu.Trigger
 							><DropdownMenu.Content align="end"
+								><DropdownMenu.Item onclick={() => goto(`/insights/expenses/${expense.id}`)}
+									><ChartLine />Deep dive</DropdownMenu.Item
 								><DropdownMenu.Item onclick={() => edit(expense)}><Pencil />Edit</DropdownMenu.Item
+								><DropdownMenu.Item onclick={() => submit('toggleRequired', expense.id)}
+									>{#if expense.required}<LockOpen />Mark optional{:else}<Lock />Mark required{/if}</DropdownMenu.Item
 								><DropdownMenu.Item onclick={() => submit('toggle', expense.id)}
 									><CirclePause />{expense.active ? 'Pause' : 'Resume'}</DropdownMenu.Item
 								><DropdownMenu.Item
@@ -185,6 +223,9 @@
 							></DropdownMenu.Root
 						>
 						<form id="toggle-{expense.id}" method="POST" action="?/toggle">
+							<input type="hidden" name="id" value={expense.id} />
+						</form>
+						<form id="toggleRequired-{expense.id}" method="POST" action="?/toggleRequired">
 							<input type="hidden" name="id" value={expense.id} />
 						</form>
 						<form id="delete-{expense.id}" method="POST" action="?/delete">
@@ -216,6 +257,6 @@
 
 {#if editingExpense}
 	{#key editingExpense.id}
-		<AddExpenseDialog bind:open={showEdit} expense={editingExpense} />
+		<AddExpenseDialog bind:open={showEdit} expense={editingExpense} {categories} />
 	{/key}
 {/if}

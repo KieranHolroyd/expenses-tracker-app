@@ -56,7 +56,37 @@ code path without a network round trip.
 
 ## Data import
 
-Use **Import CSV** on the Expenses page. Ledgerly accepts the original recurring-expenses sheet export or a conventional CSV with `Description` and `Amount` columns. Optional columns include `Date`, `Category`, `Type`, and `Recurring Period`.
+Use **Import CSV** on the Expenses page. Ledgerly accepts the original recurring-expenses sheet export or a conventional CSV with `Description` and `Amount` columns. Optional columns include `Date`, `Category`, `Type`, `Recurring Period`, `Status`, and `Necessity` (`Required` or `Optional`, defaulting to optional). Exports carry the same columns, so a round trip preserves what you have marked.
+
+## Required expenses
+
+Any expense can be marked **required** — rent, insurance, the bill you cannot drop. Nothing is
+required until you say so, so an untouched line-up reads as entirely discretionary. Marking one
+keeps it out of the cut-list what-if on Insights and sets the floor your recurring spend cannot go
+below, which the Insights page reports against take-home pay, per category, and month by month.
+
+## Auto-categorise
+
+Set `OPENROUTER_API_KEY` and an **Auto-categorise** button appears on the Expenses page. It runs in
+two model calls via [OpenRouter](https://openrouter.ai):
+
+1. The whole expense list is read once and a single category set is proposed for it. The ceiling
+   scales with the list — roughly one category per four expenses, never more than eight — so the
+   model has to merge near-duplicates like "AI Services" and "AI Tools" rather than keep both.
+2. Every expense is then filed under one of those categories, in batches of 60.
+
+Category names that differ only by a filler word ("Services", "Tools", "Apps") or by plurality are
+folded together locally as well, both when the set is proposed and when a reply is matched back
+against it, so a stray synonym lands in the right category instead of being dropped.
+
+Only rows whose category actually changes are written, and any reply naming a category outside the
+proposed set — or an expense that isn't in the list — is dropped rather than saved, so a bad reply
+can leave categories unchanged but never scramble them.
+
+`OPENROUTER_MODEL` picks the model; it defaults to `openai/gpt-5.6-terra`.
+
+Note that running it sends expense names, amounts and cadences to OpenRouter. That includes
+passcode-protected profiles: the rows are decrypted in the server process to build the prompt.
 
 ## Quality checks
 

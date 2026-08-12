@@ -33,9 +33,6 @@
 
 <Card.Root>
 	<Card.Header>
-		<p class="text-coral mb-3 text-[11px] font-extrabold tracking-[.16em] uppercase">
-			Distribution
-		</p>
 		<h2 class="font-serif text-2xl">How the spend is spread</h2>
 	</Card.Header>
 	<Card.Content class="space-y-6">

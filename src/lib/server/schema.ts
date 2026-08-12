@@ -71,6 +71,7 @@ export async function initializeSchema(client: Client) {
 			cadence TEXT NOT NULL CHECK (cadence IN ('Monthly', 'Yearly')),
 			next_due_date TEXT NOT NULL,
 			active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+			required INTEGER NOT NULL DEFAULT 0 CHECK (required IN (0, 1)),
 			secret TEXT,
 			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			${ENCRYPTED_ROW_CHECK(['name', 'category', 'amount_pence'])}
@@ -98,6 +99,7 @@ export async function initializeSchema(client: Client) {
 					cadence TEXT NOT NULL CHECK (cadence IN ('Monthly', 'Yearly')),
 					next_due_date TEXT NOT NULL,
 					active INTEGER NOT NULL DEFAULT 1 CHECK (active IN (0, 1)),
+					required INTEGER NOT NULL DEFAULT 0 CHECK (required IN (0, 1)),
 					secret TEXT,
 					created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 					${ENCRYPTED_ROW_CHECK(['name', 'category', 'amount_pence'])}
@@ -108,6 +110,14 @@ export async function initializeSchema(client: Client) {
 				'ALTER TABLE expenses_new RENAME TO expenses'
 			],
 			'write'
+		);
+	}
+
+	// Re-read, because the rebuild above may just have supplied this column.
+	// Existing rows default to optional: nothing is required until someone says so.
+	if (!(await columnNames(client, 'expenses')).has('required')) {
+		await client.execute(
+			'ALTER TABLE expenses ADD COLUMN required INTEGER NOT NULL DEFAULT 0 CHECK (required IN (0, 1))'
 		);
 	}
 

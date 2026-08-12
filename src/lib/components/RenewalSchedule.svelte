@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { expensePalette, fullDate, money } from '$lib/format';
+	import { categoryColor, fullDate, money } from '$lib/format';
 	import type { ExpenseStats } from '$lib/types';
 	import { Badge } from '$lib/components/ui/badge';
 	import * as Card from '$lib/components/ui/card';
@@ -21,7 +21,7 @@
 <div class="grid gap-5">
 	<Card.Root>
 		<Card.Header>
-			<p class="text-coral mb-3 text-[11px] font-extrabold tracking-[.16em] uppercase">
+			<p class="text-muted-foreground mb-2 text-[10px] font-bold tracking-[.14em] uppercase">
 				Short horizon
 			</p>
 			<h2 class="font-serif text-2xl">What lands soon</h2>
@@ -42,7 +42,7 @@
 						<span class="flex min-w-0 items-center gap-2.5">
 							<i
 								class="size-2 shrink-0 rounded-full"
-								style:background={expensePalette[charge.category] ?? expensePalette.Other}
+								style:background={categoryColor(charge.category)}
 							></i>
 							<b class="truncate text-[13px]">{charge.name}</b>
 							{#if charge.cadence === 'Yearly'}<Badge variant="secondary" class="text-[10px]"
@@ -63,7 +63,7 @@
 
 	<Card.Root>
 		<Card.Header>
-			<p class="text-coral mb-3 text-[11px] font-extrabold tracking-[.16em] uppercase">
+			<p class="text-muted-foreground mb-2 text-[10px] font-bold tracking-[.14em] uppercase">
 				Annual renewals
 			</p>
 			<h2 class="font-serif text-2xl">{money(renewals.annual)} in lump sums</h2>

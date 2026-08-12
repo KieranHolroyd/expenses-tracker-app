@@ -1,21 +1,31 @@
 <script lang="ts">
 	import { Pencil, Plus } from '@lucide/svelte';
+	import { defaultCategories } from '$lib/format';
 	import type { Expense } from '$lib/types';
+	import CategoryOmnibox from '$lib/components/CategoryOmnibox.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Field from '$lib/components/ui/field';
 	import { Input } from '$lib/components/ui/input';
 	import * as InputGroup from '$lib/components/ui/input-group';
 	import * as Select from '$lib/components/ui/select';
-	let { open = $bindable(), expense }: { open: boolean; expense?: Expense } = $props();
+	let {
+		open = $bindable(),
+		expense,
+		categories = []
+	}: { open: boolean; expense?: Expense; categories?: string[] } = $props();
 	let category = $state('Software');
 	let cadence = $state('Monthly');
+	let required = $state(false);
 	let editing = $derived(Boolean(expense));
+	// The built-in six always appear, so a new profile has somewhere to start.
+	let options = $derived([...new Set([...categories, ...defaultCategories])].sort());
 
 	$effect(() => {
 		if (open) {
 			category = expense?.category ?? 'Software';
 			cadence = expense?.cadence ?? 'Monthly';
+			required = Boolean(expense?.required);
 		}
 	});
 </script>
@@ -63,13 +73,9 @@
 					>
 				</Field.Field>
 				<Field.Field>
-					<Field.Label>Category</Field.Label><Select.Root type="single" bind:value={category}
-						><Select.Trigger class="w-full">{category}</Select.Trigger><Select.Content
-							>{#each ['Software', 'Infrastructure', 'Entertainment', 'Lifestyle', 'Home', 'Other'] as item (item)}<Select.Item
-									value={item}>{item}</Select.Item
-								>{/each}</Select.Content
-						></Select.Root
-					><input type="hidden" name="category" value={category} />
+					<Field.Label for="expense-category">Category</Field.Label>
+					<CategoryOmnibox bind:value={category} categories={options} />
+					<Field.Description>Pick one, or type a name of your own.</Field.Description>
 				</Field.Field>
 				<Field.Field>
 					<Field.Label>Cadence</Field.Label><Select.Root type="single" bind:value={cadence}
@@ -88,6 +94,26 @@
 						required
 						value={expense?.next_due_date ?? new Date().toISOString().slice(0, 10)}
 					/>
+				</Field.Field>
+				<Field.Field class="col-span-2 max-sm:col-span-1">
+					<label
+						class="hover:bg-accent/40 flex cursor-pointer items-start gap-3 rounded-xl border p-3.5"
+					>
+						<input
+							type="checkbox"
+							name="required"
+							value="1"
+							bind:checked={required}
+							class="accent-coral mt-0.5 size-4 shrink-0"
+						/>
+						<span>
+							<b class="block text-[13px]">This one is required</b>
+							<small class="text-muted-foreground"
+								>Rent, insurance, a bill you cannot drop. Everything is optional until you say
+								otherwise, and required expenses are kept out of the cut list.</small
+							>
+						</span>
+					</label>
 				</Field.Field>
 			</Field.Group>
 			<Dialog.Footer class="col-span-2 border-t pt-5 max-sm:col-span-1"

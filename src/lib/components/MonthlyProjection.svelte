@@ -23,9 +23,6 @@
 	<Card.Header>
 		<div class="flex items-start justify-between gap-4 max-sm:flex-col">
 			<div>
-				<p class="text-coral mb-3 text-[11px] font-extrabold tracking-[.16em] uppercase">
-					Next 12 calendar months
-				</p>
 				<h2 class="font-serif text-2xl">What each month actually costs</h2>
 				<p class="text-muted-foreground mt-2 max-w-lg text-sm">
 					Charges landed on the calendar rather than smoothed. Annual renewals make some months far

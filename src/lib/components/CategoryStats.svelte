@@ -1,17 +1,16 @@
 <script lang="ts">
-	import { expensePalette, money, percent } from '$lib/format';
+	import { categoryColor, money, percent } from '$lib/format';
 	import type { ExpenseStats } from '$lib/types';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 
 	let { stats }: { stats: ExpenseStats } = $props();
 	let { categories, totals } = $derived(stats);
-	const colorOf = (name: string) => expensePalette[name] ?? expensePalette.Other;
+	const colorOf = categoryColor;
 </script>
 
 <Card.Root class="gap-0 overflow-hidden py-0">
 	<div class="border-b p-6">
-		<p class="text-coral mb-3 text-[11px] font-extrabold tracking-[.16em] uppercase">By category</p>
 		<h2 class="font-serif text-2xl">Yearly cost per category</h2>
 		<p class="text-muted-foreground mt-2 text-sm">
 			Cadence-normalised, so a £79/year licence sits beside a £18/month subscription fairly.
@@ -31,18 +30,21 @@
 			{#each categories as category (category.name)}
 				<Table.Row>
 					<Table.Cell>
-						<div class="flex items-center gap-2.5">
+						<a
+							class="text-ink flex items-center gap-2.5 no-underline"
+							href="/insights/categories/{category.slug}"
+						>
 							<i class="size-2.5 shrink-0 rounded-full" style:background={colorOf(category.name)}
 							></i>
 							<div>
-								<b class="block text-[13px]">{category.name}</b>
+								<b class="block text-[13px] hover:underline">{category.name}</b>
 								{#if category.largest}
 									<small class="text-muted-foreground"
 										>largest: {category.largest.name} · {money(category.largest.annual)}/yr</small
 									>
 								{/if}
 							</div>
-						</div>
+						</a>
 					</Table.Cell>
 					<Table.Cell class="text-right tabular-nums">{category.count}</Table.Cell>
 					<Table.Cell class="text-muted-foreground text-right tabular-nums"
