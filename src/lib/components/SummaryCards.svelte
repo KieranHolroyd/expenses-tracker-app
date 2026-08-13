@@ -60,7 +60,8 @@
 					<b class="text-foreground">{next.name}</b> · {fullDate(next.date)}
 				</p>
 				<p class="text-muted-foreground mt-1 text-xs">
-					{money(stats.upcoming.next30)} due in the next 30 days
+					{money(stats.upcoming.next30.total)} due in the next 30 days{#if stats.upcoming.next30.required},
+						{money(stats.upcoming.next30.required)} of it required{/if}
 				</p>{/if}</Card.Content
 		></Card.Root
 	>

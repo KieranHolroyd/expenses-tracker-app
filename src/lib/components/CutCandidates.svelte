@@ -8,6 +8,15 @@
 	let { stats }: { stats: ExpenseStats } = $props();
 	let { cutCandidates, totals, income, commitment } = $derived(stats);
 	let lockedHere = $derived(cutCandidates.filter((candidate) => candidate.required));
+	// Built here rather than inline, because a conditional clause mid-sentence
+	// loses the space in front of it once the markup wraps.
+	let lockedNote = $derived(
+		lockedHere.length === 0
+			? ''
+			: lockedHere.length === 1
+				? `1 of the ${cutCandidates.length} here is required, so it is shown for scale only.`
+				: `${lockedHere.length} of the ${cutCandidates.length} here are required, so they are shown for scale only.`
+	);
 	// Selection is a what-if only: nothing here writes to the expense itself.
 	let selected = new SvelteSet<number>();
 	let saved = $derived(
@@ -57,8 +66,7 @@
 					<span class="min-w-0 flex-1">
 						<b class="block truncate text-[13px]" class:line-through={checked}>{candidate.name}</b>
 						<span class="text-muted-foreground text-xs"
-							>{candidate.category}{#if candidate.required}
-								· required{/if}</span
+							>{candidate.category}{candidate.required ? ' · required' : ''}</span
 						>
 					</span>
 				</label>
@@ -91,9 +99,11 @@
 					{money(saved / 12)} a month back. Committed spend would fall to
 					<b class="text-foreground">{money(remaining)}</b>, or
 					{percent(income.annual ? remaining / income.annual : 0, 1)} of take-home pay — down from
-					{percent(income.committedShare, 1)}.{#if commitment.required}
+					{percent(income.committedShare, 1)}.
+					{#if commitment.required}
 						No amount of ticking gets below the
-						<b class="text-foreground">{money(commitment.required)}</b> you have marked required.{/if}
+						<b class="text-foreground">{money(commitment.required)}</b> you have marked required.
+					{/if}
 				</p>
 			{:else}
 				<p class="text-muted-foreground text-xs leading-relaxed">
@@ -102,10 +112,7 @@
 							cutCandidates[2]?.cumulativeShare ?? cutCandidates.at(-1)!.cumulativeShare
 						)}</b
 					>
-					of everything committed. Tick a few to model the saving.{#if lockedHere.length}
-						{lockedHere.length} of the {cutCandidates.length} here
-						{lockedHere.length === 1 ? 'is' : 'are'} required, so
-						{lockedHere.length === 1 ? 'it is' : 'they are'} shown for scale only.{/if}
+					of everything committed. Tick a few to model the saving. {lockedNote}
 				</p>
 			{/if}
 		</Card.Footer>

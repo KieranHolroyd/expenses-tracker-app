@@ -101,7 +101,10 @@ export type CategoryStat = {
 };
 
 /** One day of the month, with everything that lands on it over the next year. */
-export type DayLoad = { day: number; amount: number; count: number };
+export type DayLoad = { day: number; amount: number; count: number; required: number };
+
+/** A run of upcoming days, priced whole and split by what has to be paid. */
+export type SpendWindow = { total: number; required: number; optional: number; count: number };
 
 /** An expense ranked by how much cancelling it would actually save. */
 export type CutCandidate = {
@@ -145,7 +148,7 @@ export type ExpenseStats = {
 		/** The 12-month projection's heaviest month, counting only required charges. */
 		peakRequiredMonth: MonthProjection | null;
 	};
-	paused: { count: number; annual: number };
+	paused: { count: number; annual: number; required: number };
 	/** How the annual total splits by how it is billed, not by when it is used. */
 	cadenceMix: { monthlyBilled: number; yearlyBilled: number; yearlyShare: number };
 	distribution: {
@@ -181,8 +184,20 @@ export type ExpenseStats = {
 		trough: MonthProjection | null;
 		swing: number;
 	};
-	upcoming: { next7: number; next30: number; next90: number; charges: ProjectedCharge[] };
-	renewals: { count: number; annual: number; charges: ProjectedCharge[] };
+	upcoming: {
+		next7: SpendWindow;
+		next30: SpendWindow;
+		next90: SpendWindow;
+		charges: ProjectedCharge[];
+	};
+	renewals: {
+		count: number;
+		annual: number;
+		/** The portion of the renewals you have marked required, and how many. */
+		required: number;
+		requiredCount: number;
+		charges: ProjectedCharge[];
+	};
 	income: {
 		annual: number;
 		perCycle: number;

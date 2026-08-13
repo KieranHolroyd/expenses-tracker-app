@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Lock } from '@lucide/svelte';
 	import { categoryColor, fullDate, money } from '$lib/format';
 	import type { ExpenseStats } from '$lib/types';
 	import { Badge } from '$lib/components/ui/badge';
@@ -28,10 +29,33 @@
 		</Card.Header>
 		<Card.Content class="space-y-5">
 			<dl class="grid grid-cols-3 gap-4">
-				{#each windows as [label, amount] (label)}
+				{#each windows as [label, window] (label)}
 					<div>
 						<dt class="text-[10px] font-bold tracking-wider text-[#8b948f] uppercase">{label}</dt>
-						<dd class="mt-1 font-serif text-2xl">{money(amount)}</dd>
+						<dd class="mt-1 font-serif text-2xl">{money(window.total)}</dd>
+						<dd class="text-muted-foreground mt-1 text-[11px] tabular-nums">
+							{#if window.required}
+								{money(window.required)} required
+							{:else if window.total}
+								all optional
+							{:else}
+								nothing due
+							{/if}
+						</dd>
+						<!-- A two-tone rule rather than a second number: at this size the
+						     proportion reads faster than the pair of figures does. -->
+						{#if window.total}
+							<div class="mt-2 flex h-1 gap-px overflow-hidden rounded-full bg-[#eeeae2]">
+								<div
+									class="bg-ink h-full"
+									style:width={`${(window.required / window.total) * 100}%`}
+								></div>
+								<div
+									class="h-full flex-1"
+									style:background="color-mix(in srgb, var(--color-coral) 55%, white)"
+								></div>
+							</div>
+						{/if}
 					</div>
 				{/each}
 			</dl>
@@ -47,6 +71,8 @@
 							<b class="truncate text-[13px]">{charge.name}</b>
 							{#if charge.cadence === 'Yearly'}<Badge variant="secondary" class="text-[10px]"
 									>Yearly</Badge
+								>{/if}{#if charge.required}<Badge variant="outline" class="gap-1 text-[10px]"
+									><Lock class="size-2.5" />Required</Badge
 								>{/if}
 						</span>
 						<span class="text-muted-foreground shrink-0 text-xs tabular-nums">
@@ -70,6 +96,10 @@
 			<p class="text-muted-foreground mt-2 text-sm">
 				{renewals.count} yearly charge{renewals.count === 1 ? '' : 's'} due over the next 12 months. Setting
 				aside {money(renewals.annual / 12)} a month covers them.
+				{#if renewals.requiredCount}
+					{money(renewals.required)} of that is required, so {money(renewals.required / 12)} a month is
+					the part you cannot put off.
+				{/if}
 			</p>
 		</Card.Header>
 		<Card.Content>

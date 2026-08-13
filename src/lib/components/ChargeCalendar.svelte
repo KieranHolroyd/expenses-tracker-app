@@ -20,7 +20,7 @@
 		<h2 class="font-serif text-2xl">When in the month it lands</h2>
 		<p class="text-muted-foreground mt-2 text-sm">
 			Every charge in the next 12 months, stacked onto the day of the month it falls on. Darker is
-			heavier.
+			heavier; a bar under the date means something required lands that day.
 		</p>
 	</Card.Header>
 	<Card.Content>
@@ -38,8 +38,13 @@
 					onfocus={() => (hovered = day)}
 					onblur={() => (hovered = null)}
 					aria-label={load
-						? `Day ${day}: ${money(load.amount)} across ${load.count} charges`
-						: `Day ${day}: nothing charged`}>{day}</button
+						? `Day ${day}: ${money(load.amount)} across ${load.count} charges, ${money(load.required)} of it required`
+						: `Day ${day}: nothing charged`}
+					>{day}{#if load?.required}<i
+							class="mx-auto mt-0.5 block h-[3px] w-2 rounded-full"
+							style:background={load.amount > peak * 0.55 ? 'white' : 'var(--color-ink)'}
+							aria-hidden="true"
+						></i>{/if}</button
 				>
 			{/each}
 		</div>
@@ -51,7 +56,12 @@
 				</p>
 				<p class="mt-1 font-serif text-2xl">{money(detail.amount)}</p>
 				<p class="text-muted-foreground text-xs">
-					{detail.count} charge{detail.count === 1 ? '' : 's'} over the year
+					{detail.count} charge{detail.count === 1 ? '' : 's'} over the year ·
+					{#if detail.required}
+						{money(detail.required)} required, {money(detail.amount - detail.required)} optional
+					{:else}
+						all optional
+					{/if}
 				</p>
 			{:else if chargeDays.heaviest}
 				<p class="text-muted-foreground text-xs leading-relaxed">
