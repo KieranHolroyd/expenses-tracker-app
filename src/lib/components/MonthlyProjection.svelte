@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Table2 } from '@lucide/svelte';
 	import { money, percent } from '$lib/format';
-	import type { ExpenseStats } from '$lib/types';
+	import type { ExpenseStats, MonthProjection } from '$lib/types';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
@@ -9,13 +9,23 @@
 	// Coral / indigo validated for CVD separation, chroma and contrast on a white surface.
 	const RECURRING = '#de735c';
 	const RENEWAL = '#5968c5';
+	const REQUIRED = '#172621';
 
 	let { stats }: { stats: ExpenseStats } = $props();
 	let { months, average, peak, trough, swing, total } = $derived(stats.projection);
 	let scaleMax = $derived(Math.max(1000, ...months.map((month) => month.total)) * 1.12);
 	let hovered = $state<number | null>(null);
 	let showTable = $state(false);
+	// Which way each column is cut: by how it is billed, or by whether it can be
+	// dropped. The bars are the same height either way — only the split moves.
+	let split = $state<'cadence' | 'necessity'>('cadence');
 	let hasRenewals = $derived(months.some((month) => month.renewals > 0));
+	let hasRequired = $derived(months.some((month) => month.required > 0));
+	// The highlighted segment sits on top in both modes; the rest is the remainder.
+	let topOf = $derived((month: MonthProjection) =>
+		split === 'cadence' ? month.renewals : month.required
+	);
+	let topColor = $derived(split === 'cadence' ? RENEWAL : REQUIRED);
 	const height = (value: number, max: number) => `${Math.max(0, (value / max) * 100)}%`;
 </script>
 
@@ -29,21 +39,48 @@
 					heavier than the {money(average)} average.
 				</p>
 			</div>
-			<Button variant="outline" size="sm" class="shrink-0" onclick={() => (showTable = !showTable)}>
-				<Table2 class="size-3.5" />{showTable ? 'Hide table' : 'View as table'}
-			</Button>
+			<div class="flex shrink-0 items-center gap-2">
+				<div class="flex rounded-lg border p-0.5" role="group" aria-label="Split each month by">
+					{#each [['cadence', 'By cadence'], ['necessity', 'By necessity']] as const as [value, label] (value)}
+						<button
+							type="button"
+							class="rounded-md px-2.5 py-1 text-xs font-semibold transition-colors"
+							class:bg-ink={split === value}
+							class:text-white={split === value}
+							class:text-muted-foreground={split !== value}
+							aria-pressed={split === value}
+							onclick={() => (split = value)}>{label}</button
+						>
+					{/each}
+				</div>
+				<Button variant="outline" size="sm" onclick={() => (showTable = !showTable)}>
+					<Table2 class="size-3.5" />{showTable ? 'Hide table' : 'View as table'}
+				</Button>
+			</div>
 		</div>
 	</Card.Header>
 
 	<Card.Content>
 		<div class="mb-5 flex flex-wrap items-center gap-4 text-xs text-[#66706b]">
-			{#if hasRenewals}
+			{#if split === 'cadence'}
+				{#if hasRenewals}
+					<span class="flex items-center gap-2"
+						><i class="size-2.5 rounded-full" style:background={RECURRING}></i>Monthly charges</span
+					>
+					<span class="flex items-center gap-2"
+						><i class="size-2.5 rounded-full" style:background={RENEWAL}></i>Annual renewals</span
+					>
+				{/if}
+			{:else}
 				<span class="flex items-center gap-2"
-					><i class="size-2.5 rounded-full" style:background={RECURRING}></i>Monthly charges</span
+					><i class="size-2.5 rounded-full" style:background={REQUIRED}></i>Required</span
 				>
 				<span class="flex items-center gap-2"
-					><i class="size-2.5 rounded-full" style:background={RENEWAL}></i>Annual renewals</span
+					><i class="size-2.5 rounded-full" style:background={RECURRING}></i>Optional</span
 				>
+				{#if !hasRequired}
+					<span class="text-[#929995]">— nothing is marked required yet</span>
+				{/if}
 			{/if}
 			<span class="flex items-center gap-2"
 				><i class="h-0 w-5 border-t-2 border-dashed border-[#8b948f]"></i>12-month average</span
@@ -85,26 +122,27 @@
 							onblur={() => (hovered = null)}
 							aria-label="{month.label} {month.year}: {money(
 								month.total
-							)} across {month.count} charges"
+							)} across {month.count} charges, {money(month.required)} of it required"
 						>
 							{#if month.total > 0}
+								{@const top = topOf(month)}
 								<!-- The stack takes an explicit share of the column so its segments
 								     have a definite height to size their own percentages against. -->
 								<div
 									class="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-6 flex-col justify-end gap-[2px]"
 									style:height={height(month.total, scaleMax)}
 								>
-									{#if month.renewals > 0}
+									{#if top > 0}
 										<div
 											class="shrink-0 rounded-t-[4px] transition-opacity"
-											style:height={`${(month.renewals / month.total) * 100}%`}
-											style:background={RENEWAL}
+											style:height={`${(top / month.total) * 100}%`}
+											style:background={topColor}
 											style:opacity={dimmed ? 0.45 : 1}
 										></div>
 									{/if}
 									<div
 										class="min-h-0 flex-1 transition-opacity"
-										class:rounded-t-[4px]={month.renewals === 0}
+										class:rounded-t-[4px]={top === 0}
 										style:background={RECURRING}
 										style:opacity={dimmed ? 0.45 : 1}
 									></div>
@@ -144,6 +182,13 @@
 								{month.count} charge{month.count === 1 ? '' : 's'}
 								{#if month.renewals > 0}· {money(month.renewals)} in renewals{/if}
 							</p>
+							<p class="text-muted-foreground mt-1 text-xs">
+								{#if month.required > 0}
+									{money(month.required)} required · {money(month.total - month.required)} optional
+								{:else}
+									all of it optional
+								{/if}
+							</p>
 							{#if month.elapsed > 0}
 								<p class="mt-1 text-xs text-[#8b948f]">{money(month.elapsed)} already charged</p>
 							{/if}
@@ -175,6 +220,8 @@
 					><Table.Row
 						><Table.Head>Month</Table.Head><Table.Head class="text-right">Charges</Table.Head
 						><Table.Head class="text-right">Renewals</Table.Head><Table.Head class="text-right"
+							>Required</Table.Head
+						><Table.Head class="text-right">Optional</Table.Head><Table.Head class="text-right"
 							>Total</Table.Head
 						><Table.Head class="text-right">vs average</Table.Head></Table.Row
 					></Table.Header
@@ -186,6 +233,12 @@
 							<Table.Cell class="text-right tabular-nums">{month.count}</Table.Cell>
 							<Table.Cell class="text-right tabular-nums"
 								>{month.renewals ? money(month.renewals) : '—'}</Table.Cell
+							>
+							<Table.Cell class="text-right tabular-nums"
+								>{month.required ? money(month.required) : '—'}</Table.Cell
+							>
+							<Table.Cell class="text-muted-foreground text-right tabular-nums"
+								>{money(month.total - month.required)}</Table.Cell
 							>
 							<Table.Cell class="text-right font-semibold tabular-nums"
 								>{money(month.total)}</Table.Cell

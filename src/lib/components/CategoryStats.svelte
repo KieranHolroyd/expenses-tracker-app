@@ -22,6 +22,8 @@
 				<Table.Head>Category</Table.Head>
 				<Table.Head class="text-right">Items</Table.Head>
 				<Table.Head class="text-right">Monthly</Table.Head>
+				<Table.Head class="text-right max-md:hidden">Required</Table.Head>
+				<Table.Head class="text-right max-md:hidden">Optional</Table.Head>
 				<Table.Head class="text-right">Yearly</Table.Head>
 				<Table.Head class="w-48 max-lg:hidden">Share</Table.Head>
 			</Table.Row>
@@ -50,6 +52,12 @@
 					<Table.Cell class="text-muted-foreground text-right tabular-nums"
 						>{money(category.monthly)}</Table.Cell
 					>
+					<Table.Cell class="text-right tabular-nums max-md:hidden"
+						>{category.commitment.required ? money(category.commitment.required) : '—'}</Table.Cell
+					>
+					<Table.Cell class="text-muted-foreground text-right tabular-nums max-md:hidden"
+						>{money(category.commitment.optional)}</Table.Cell
+					>
 					<Table.Cell class="text-right font-semibold tabular-nums"
 						>{money(category.annual)}</Table.Cell
 					>
@@ -68,7 +76,7 @@
 				</Table.Row>
 			{:else}
 				<Table.Row
-					><Table.Cell colspan={5} class="text-muted-foreground h-28 text-center"
+					><Table.Cell colspan={7} class="text-muted-foreground h-28 text-center"
 						>Add an expense to see category statistics.</Table.Cell
 					></Table.Row
 				>
@@ -80,6 +88,12 @@
 					<Table.Cell><b>All categories</b></Table.Cell>
 					<Table.Cell class="text-right tabular-nums">{stats.counts.active}</Table.Cell>
 					<Table.Cell class="text-right tabular-nums">{money(totals.monthly)}</Table.Cell>
+					<Table.Cell class="text-right tabular-nums max-md:hidden"
+						>{money(stats.commitment.required)}</Table.Cell
+					>
+					<Table.Cell class="text-right tabular-nums max-md:hidden"
+						>{money(stats.commitment.optional)}</Table.Cell
+					>
 					<Table.Cell class="text-right font-semibold tabular-nums"
 						>{money(totals.annual)}</Table.Cell
 					>

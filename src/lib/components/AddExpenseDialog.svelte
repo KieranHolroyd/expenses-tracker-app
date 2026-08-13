@@ -103,6 +103,7 @@
 							type="checkbox"
 							name="required"
 							value="1"
+							aria-label="This one is required"
 							bind:checked={required}
 							class="accent-coral mt-0.5 size-4 shrink-0"
 						/>

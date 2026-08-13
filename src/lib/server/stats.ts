@@ -9,6 +9,7 @@ import type {
 	ExpenseStats,
 	MonthProjection,
 	ProjectedCharge,
+	SpendWindow,
 	TrackedSpend
 } from '$lib/types';
 import { addMonths, dateForMonth, iso, startOfTodayUtc, utcDate } from './due-dates';
@@ -86,6 +87,15 @@ export function commitmentSplit(expenses: Expense[]): CommitmentSplit {
 		optionalCount: optional.length,
 		requiredShare: total ? requiredAnnual / total : 0
 	};
+}
+
+/** The same required/optional split as {@link commitmentSplit}, over dated charges. */
+export function chargeWindow(charges: ProjectedCharge[]): SpendWindow {
+	const required = charges
+		.filter((charge) => charge.required)
+		.reduce((sum, charge) => sum + charge.amount, 0);
+	const total = charges.reduce((sum, charge) => sum + charge.amount, 0);
+	return { total, required, optional: total - required, count: charges.length };
 }
 
 export function buildProjection(active: Expense[], today: Date) {
@@ -182,8 +192,13 @@ function buildChargeDays(months: MonthProjection[]) {
 	for (const month of months) {
 		for (const charge of month.charges) {
 			const day = Number(charge.date.slice(8, 10));
-			const load = totals.get(day) ?? { day, amount: 0, count: 0 };
-			totals.set(day, { day, amount: load.amount + charge.amount, count: load.count + 1 });
+			const load = totals.get(day) ?? { day, amount: 0, count: 0, required: 0 };
+			totals.set(day, {
+				day,
+				amount: load.amount + charge.amount,
+				count: load.count + 1,
+				required: load.required + (charge.required ? charge.amount : 0)
+			});
 		}
 	}
 	const days = [...totals.values()].sort((a, b) => a.day - b.day);
@@ -285,15 +300,14 @@ export function buildStats(
 		.flatMap((month) => month.charges)
 		.filter((charge) => charge.date >= todayIso)
 		.sort((a, b) => a.date.localeCompare(b.date));
-	const within = (days: number) => {
+	const within = (days: number): SpendWindow => {
 		const limit = iso(new Date(todayUtc.getTime() + days * DAY_MS));
-		return upcomingCharges
-			.filter((charge) => charge.date <= limit)
-			.reduce((sum, charge) => sum + charge.amount, 0);
+		return chargeWindow(upcomingCharges.filter((charge) => charge.date <= limit));
 	};
 
 	const hhi = annual ? annualCosts.reduce((sum, cost) => sum + (cost / annual) ** 2, 0) : 0;
 	const renewalCharges = upcomingCharges.filter((charge) => charge.cadence === 'Yearly');
+	const renewalWindow = chargeWindow(renewalCharges);
 	const categories = buildCategories(active, annual);
 	const categoryHhi = categories.reduce((sum, category) => sum + category.share ** 2, 0);
 
@@ -333,7 +347,8 @@ export function buildStats(
 		},
 		paused: {
 			count: inactive.length,
-			annual: inactive.reduce((sum, expense) => sum + annualCost(expense), 0)
+			annual: inactive.reduce((sum, expense) => sum + annualCost(expense), 0),
+			required: commitmentSplit(inactive).required
 		},
 		cadenceMix: {
 			monthlyBilled: active
@@ -377,7 +392,9 @@ export function buildStats(
 		},
 		renewals: {
 			count: renewalCharges.length,
-			annual: renewalCharges.reduce((sum, charge) => sum + charge.amount, 0),
+			annual: renewalWindow.total,
+			required: renewalWindow.required,
+			requiredCount: renewalCharges.filter((charge) => charge.required).length,
 			charges: renewalCharges
 		},
 		income: {
