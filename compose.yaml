@@ -11,6 +11,14 @@ services:
       ORIGIN: ${ORIGIN:?Set ORIGIN to the public URL, for example https://expenses.example.com}
       TURSO_DATABASE_URL: ${TURSO_DATABASE_URL:?Set TURSO_DATABASE_URL to your Turso database URL, for example libsql://ledgerly-you.turso.io}
       TURSO_AUTH_TOKEN: ${TURSO_AUTH_TOKEN:?Set TURSO_AUTH_TOKEN to a Turso database token}
+
+      # --- OpenTelemetry ------------------------------------------------
+      # Points at the Alloy collector in the observability stack. Set this to
+      # an empty string to switch telemetry off entirely — the SDK never
+      # starts and the app behaves exactly as it did before.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT-http://192.168.0.1:4318}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-ledgerly}
+      OTEL_SERVICE_VERSION: ${OTEL_SERVICE_VERSION:-}
     read_only: true
     tmpfs:
       - /tmp:size=64m,mode=1777

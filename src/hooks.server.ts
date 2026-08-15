@@ -1,6 +1,8 @@
 import type { Handle, ServerInit } from '@sveltejs/kit';
+import { sequence } from '@sveltejs/kit/hooks';
 import { getSession } from '$lib/server/auth';
 import { startRegistration } from '$lib/server/registration';
+import { telemetryHandle } from '$lib/server/telemetry';
 
 /**
  * Runs once when the server process starts.
@@ -23,7 +25,11 @@ export const init: ServerInit = () => {
  * rather than two, and a central path matcher is the kind of thing that gets
  * forgotten when a route is added.
  */
-export const handle: Handle = async ({ event, resolve }) => {
+const sessionHandle: Handle = async ({ event, resolve }) => {
 	event.locals.session = await getSession(event.cookies);
 	return resolve(event);
 };
+
+// Telemetry goes first so its span covers session resolution too — a slow
+// session lookup is exactly the kind of thing worth seeing in a trace.
+export const handle = sequence(telemetryHandle, sessionHandle);
