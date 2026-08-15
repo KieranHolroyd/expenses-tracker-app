@@ -1,11 +1,13 @@
 import { fail, redirect, type Cookies } from '@sveltejs/kit';
-import { pluck, query, transaction } from '$lib/server/db';
+import { PERMISSIONS, requirePermission } from '$lib/server/auth';
+import { transaction } from '$lib/server/db';
 import { endUnlockSession } from '$lib/server/lock';
 import {
+	claimUnownedProfiles,
 	findProfile,
+	profilesOwnedBy,
 	publicProfile,
-	PROFILE_COOKIE,
-	type ProfileRecord
+	PROFILE_COOKIE
 } from '$lib/server/profile';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -30,41 +32,52 @@ function selectProfile(cookies: Cookies, id: number) {
 	});
 }
 
-export const load: PageServerLoad = async () => ({
-	profiles: (
-		await query<ProfileRecord>(
-			'SELECT id, name, avatar_color, passcode_salt, passcode_key FROM profiles ORDER BY id'
-		)
-	).map(publicProfile)
-});
+/**
+ * The picker is where every session lands before it reaches any data, which
+ * makes it the right place to run the one-time adoption of profiles that predate
+ * sign-in. After the first time it is a no-op update — see claimUnownedProfiles
+ * for why it cannot hand one account's profiles to another.
+ */
+export const load: PageServerLoad = async (event) => {
+	const session = requirePermission(event, PERMISSIONS.read);
+	await claimUnownedProfiles(session.user.id);
+	return {
+		profiles: (await profilesOwnedBy(session.user.id)).map(publicProfile),
+		account: { name: session.user.name, email: session.user.email, role: session.role }
+	};
+};
 
 export const actions: Actions = {
-	select: async ({ request, cookies }) => {
-		const id = Number((await request.formData()).get('id'));
-		const profile = await findProfile(id);
+	select: async (event) => {
+		const session = requirePermission(event, PERMISSIONS.read);
+		const id = Number((await event.request.formData()).get('id'));
+		const profile = await findProfile(id, session.user.id);
 		if (!profile) return fail(404, { message: 'That profile no longer exists.' });
 		// Switching profiles drops any unlock session, so a protected profile is
 		// never left open behind someone else's pick.
-		endUnlockSession(cookies);
-		selectProfile(cookies, id);
+		endUnlockSession(event.cookies);
+		selectProfile(event.cookies, id);
 		redirect(303, profile.passcode_key ? '/unlock' : '/expenses');
 	},
-	create: async ({ request, cookies }) => {
-		const name = String((await request.formData()).get('name') ?? '').trim();
+	create: async (event) => {
+		const session = requirePermission(event, PERMISSIONS.write);
+		const name = String((await event.request.formData()).get('name') ?? '').trim();
 		if (!name || name.length > 24) {
 			return fail(400, { message: 'Profile names must be between 1 and 24 characters.' });
 		}
 
-		const count = Number((await pluck<number>('SELECT COUNT(*) FROM profiles')) ?? 0);
-		if (count >= MAX_PROFILES) {
+		// Counted per account: the limit is about one person's profile list, and a
+		// global count would let one account exhaust everybody else's.
+		const owned = await profilesOwnedBy(session.user.id);
+		if (owned.length >= MAX_PROFILES) {
 			return fail(400, { message: `You can create up to ${MAX_PROFILES} profiles.` });
 		}
 
 		try {
 			const id = await transaction(async (tx) => {
 				const inserted = await tx.execute({
-					sql: 'INSERT INTO profiles (name, avatar_color) VALUES (?, ?) RETURNING id',
-					args: [name, COLORS[count % COLORS.length]]
+					sql: 'INSERT INTO profiles (name, avatar_color, owner_sub) VALUES (?, ?, ?) RETURNING id',
+					args: [name, COLORS[owned.length % COLORS.length], session.user.id]
 				});
 				const profileId = Number(inserted.rows[0].id);
 				await tx.execute({
@@ -73,8 +86,8 @@ export const actions: Actions = {
 				});
 				return profileId;
 			});
-			endUnlockSession(cookies);
-			selectProfile(cookies, id);
+			endUnlockSession(event.cookies);
+			selectProfile(event.cookies, id);
 		} catch (error) {
 			if (error instanceof Error && error.message.includes('UNIQUE')) {
 				return fail(400, { message: 'A profile with that name already exists.' });

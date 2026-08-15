@@ -6,8 +6,8 @@ import { openExpenses } from '$lib/server/secure';
 import type { RequestHandler } from './$types';
 
 /** Note that the download itself is plaintext CSV, whatever the profile's passcode state. */
-export const GET: RequestHandler = async ({ cookies }) => {
-	const { profile, key } = await requireUnlockedProfile(cookies);
+export const GET: RequestHandler = async (event) => {
+	const { profile, key } = await requireUnlockedProfile(event);
 	await advancePastDueExpenses(profile.id);
 	const expenses = openExpenses(key, await expensesFor(profile.id));
 

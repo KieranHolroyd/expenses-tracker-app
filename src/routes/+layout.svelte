@@ -3,9 +3,11 @@
 	import { page } from '$app/state';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	let { children } = $props();
-	// The profile picker and the lock screen are full-bleed: neither has a profile
-	// whose data the header is allowed to show.
-	let standalone = $derived(['/profiles', '/unlock'].includes(page.url.pathname));
+	// The profile picker, the lock screen and the sign-in pages are full-bleed:
+	// none of them has a profile whose data the header is allowed to show.
+	let standalone = $derived(
+		['/profiles', '/unlock'].includes(page.url.pathname) || page.url.pathname.startsWith('/auth')
+	);
 </script>
 
 <svelte:head>

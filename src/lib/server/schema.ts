@@ -57,8 +57,11 @@ export async function initializeSchema(client: Client) {
 	await client.executeMultiple(`
 		CREATE TABLE IF NOT EXISTS profiles (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+			name TEXT NOT NULL COLLATE NOCASE,
 			avatar_color TEXT NOT NULL,
+			owner_sub TEXT,
+			passcode_salt TEXT,
+			passcode_key TEXT,
 			created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
 		INSERT OR IGNORE INTO profiles (id, name, avatar_color) VALUES (1, 'Kieran', '#de735c');
@@ -129,6 +132,36 @@ export async function initializeSchema(client: Client) {
 		await client.execute('ALTER TABLE profiles ADD COLUMN passcode_key TEXT');
 	}
 
+	// Profiles belong to the Holroyd ID account that created them. A pre-auth
+	// database has no owners, so the column arrives null and the first person to
+	// sign in adopts them — see claimUnownedProfiles in profile.ts.
+	//
+	// Rebuilt rather than altered because the old table made `name` globally
+	// unique. With more than one identity in play that constraint spans people:
+	// it would refuse a name because a *different* account had taken it, which
+	// both blocks a legitimate profile and reveals that the other one exists.
+	// Uniqueness is per owner now, as the index below.
+	if (!profileColumns.has('owner_sub')) {
+		await client.batch(
+			[
+				`CREATE TABLE profiles_owned (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					name TEXT NOT NULL COLLATE NOCASE,
+					avatar_color TEXT NOT NULL,
+					owner_sub TEXT,
+					passcode_salt TEXT,
+					passcode_key TEXT,
+					created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+				)`,
+				`INSERT INTO profiles_owned (id, name, avatar_color, passcode_salt, passcode_key, created_at)
+				SELECT id, name, avatar_color, passcode_salt, passcode_key, created_at FROM profiles`,
+				'DROP TABLE profiles',
+				'ALTER TABLE profiles_owned RENAME TO profiles'
+			],
+			'write'
+		);
+	}
+
 	const settingsColumns = await columnNames(client, 'app_settings');
 	if (settingsColumns.size && !settingsColumns.has('profile_id')) {
 		await client.batch(
@@ -192,9 +225,43 @@ export async function initializeSchema(client: Client) {
 		);
 	}
 
+	// Identity lives at Holroyd ID; these two tables are all Ledgerly keeps of it.
+	//
+	// `sessions` holds Ledgerly's own session, minted from the OIDC claims: the
+	// browser carries an opaque token and nothing else, so a session can be
+	// revoked server-side and no claim is ever parked in a cookie. Times are
+	// epoch milliseconds — SQLite has no timestamp type, and storing them as
+	// integers keeps the comparisons the session code makes exact.
+	//
+	// `oidc_client` is only ever written for a confidential client. Ledgerly
+	// normally registers as a public one, which has no secret worth a row.
+	await client.executeMultiple(`
+		CREATE TABLE IF NOT EXISTS sessions (
+			token TEXT PRIMARY KEY,
+			subject TEXT NOT NULL,
+			email TEXT,
+			name TEXT,
+			picture TEXT,
+			id_token TEXT,
+			refresh_token TEXT,
+			permissions TEXT NOT NULL DEFAULT '[]',
+			role TEXT,
+			permissions_checked_at INTEGER NOT NULL,
+			expires_at INTEGER NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+		CREATE TABLE IF NOT EXISTS oidc_client (
+			issuer TEXT PRIMARY KEY,
+			client_id TEXT NOT NULL,
+			client_secret TEXT NOT NULL,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+	`);
+
 	await client.executeMultiple(`
 		INSERT OR IGNORE INTO app_settings (profile_id, payment_amount_pence, payday_anchor_date, cycle_days, cycle_type)
 		VALUES (1, 200000, '2026-07-15', 28, 'four_week');
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_owner_name ON profiles(owner_sub, name);
 		DROP INDEX IF EXISTS idx_expenses_active_due_date;
 		DROP INDEX IF EXISTS idx_expenses_unique_charge;
 		DROP INDEX IF EXISTS idx_expenses_profile_unique_charge;

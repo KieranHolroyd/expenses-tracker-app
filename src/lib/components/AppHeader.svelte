@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { ChartPie, LayoutDashboard, ReceiptText, TrendingUp } from '@lucide/svelte';
+	import { ChartPie, LayoutDashboard, LogOut, ReceiptText, TrendingUp } from '@lucide/svelte';
 	import PasscodeDialog from '$lib/components/PasscodeDialog.svelte';
 	import ProfileAvatar from '$lib/components/ProfileAvatar.svelte';
 	import * as Tabs from '$lib/components/ui/tabs';
@@ -13,6 +13,10 @@
 				: 'expenses'
 	);
 	let profile = $derived(page.data.profile);
+	let account = $derived(page.data.account);
+	// A viewer grant cannot change anything, so the passcode control is hidden
+	// rather than shown and refused. The server checks regardless.
+	let canWrite = $derived(page.data.canWrite ?? false);
 </script>
 
 <header
@@ -38,7 +42,7 @@
 		></Tabs.Root
 	>
 	<div class="ml-auto flex items-center gap-1">
-		{#if profile}
+		{#if profile && canWrite}
 			<PasscodeDialog hasPasscode={profile.has_passcode} />
 		{/if}
 		<a
@@ -55,5 +59,15 @@
 				/>
 			{/if}
 		</a>
+		<form method="POST" action="/auth/logout">
+			<button
+				type="submit"
+				class="hover:text-ink flex items-center gap-2 rounded-lg p-2.5 text-sm font-semibold text-[#59635e] transition-colors hover:bg-[#ebe8df]"
+				title={account ? `Signed in as ${account.name}` : 'Sign out'}
+				aria-label="Sign out"
+			>
+				<LogOut size={17} />
+			</button>
+		</form>
 	</div>
 </header>

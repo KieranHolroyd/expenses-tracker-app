@@ -9,7 +9,7 @@ export const UNLOCK_COOKIE = 'ledgerly_unlock';
  * re-entry after each deploy, and buys a guarantee that neither the database nor
  * a captured cookie is enough to read the data.
  */
-type Unlocked = { profileId: number; key: Buffer; expiresAt: number };
+type Unlocked = { profileId: number; ownerSub: string; key: Buffer; expiresAt: number };
 
 const sessions = new Map<string, Unlocked>();
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
@@ -26,21 +26,34 @@ function sweep(now: number) {
 	for (const [id, session] of sessions) if (session.expiresAt <= now) sessions.delete(id);
 }
 
-export function startUnlockSession(cookies: Cookies, profileId: number, key: Buffer) {
+export function startUnlockSession(
+	cookies: Cookies,
+	profileId: number,
+	ownerSub: string,
+	key: Buffer
+) {
 	const now = Date.now();
 	sweep(now);
 	const id = randomBytes(32).toString('base64url');
-	sessions.set(id, { profileId, key, expiresAt: now + SESSION_TTL_MS });
+	sessions.set(id, { profileId, ownerSub, key, expiresAt: now + SESSION_TTL_MS });
 	// A session cookie, with no maxAge: closing the browser locks the profile again.
 	cookies.set(UNLOCK_COOKIE, id, { path: '/', httpOnly: true, sameSite: 'lax' });
 }
 
-/** The data key for this profile, or null when the session is missing, stale or for another profile. */
-export function unlockedKey(cookies: Cookies, profileId: number) {
+/**
+ * The data key for this profile, or null when the session is missing, stale, or
+ * belongs to another profile or another account.
+ *
+ * The account is checked as well as the profile because these keys outlive a
+ * sign-out that failed to clean up — an unlock session is process memory keyed
+ * by a cookie, so without the owner check a stranded cookie plus a different
+ * Holroyd ID account at the same browser would be enough to open the rows.
+ */
+export function unlockedKey(cookies: Cookies, profileId: number, ownerSub: string) {
 	const id = cookies.get(UNLOCK_COOKIE);
 	if (!id) return null;
 	const session = sessions.get(id);
-	if (!session || session.profileId !== profileId) return null;
+	if (!session || session.profileId !== profileId || session.ownerSub !== ownerSub) return null;
 	if (session.expiresAt <= Date.now()) {
 		sessions.delete(id);
 		return null;

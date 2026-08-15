@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { InStatement } from '@libsql/client';
 import { AiError, aiConfigured, categoriseExpenses } from '$lib/server/ai';
+import { can, PERMISSIONS } from '$lib/server/auth';
 import { batch, execute, queryOne, rewriteStorage } from '$lib/server/db';
 import {
 	PASSCODE_PATTERN,
@@ -81,23 +82,28 @@ type ImportedExpense = {
 const chargeKey = (expense: { name: string; next_due_date: string; amount_pence: number }) =>
 	`${expense.name}\u0000${expense.next_due_date}\u0000${expense.amount_pence}`;
 
-export const load: PageServerLoad = async ({ url, cookies }) => {
-	if (url.pathname === '/') redirect(307, '/profiles');
-	const { profile, expenses, settings } = await loadLedger(cookies);
+export const load: PageServerLoad = async (event) => {
+	if (event.url.pathname === '/') redirect(307, '/profiles');
+	const { profile, expenses, settings } = await loadLedger(event);
+	const session = event.locals.session!;
 	return {
 		expenses,
 		usage: buildUsage(expenses, settings),
 		stats: buildStats(expenses, settings),
 		settings,
 		profile,
+		// The header shows who is signed in and hides the controls a viewer grant
+		// cannot use. `canWrite` is a UI affordance only — every action re-checks.
+		account: { name: session.user.name, email: session.user.email, role: session.role },
+		canWrite: can(session, PERMISSIONS.write),
 		aiEnabled: aiConfigured()
 	};
 };
 
 export const actions: Actions = {
-	add: async ({ request, cookies }) => {
-		const { profile, key } = await requireUnlockedProfile(cookies);
-		const fields = expenseFields(await request.formData());
+	add: async (event) => {
+		const { profile, key } = await requireUnlockedProfile(event, PERMISSIONS.write);
+		const fields = expenseFields(await event.request.formData());
 		if (!fields.valid) {
 			return fail(400, { message: 'Please complete every field with a valid value.' });
 		}
@@ -121,9 +127,9 @@ export const actions: Actions = {
 		);
 		return { success: true };
 	},
-	edit: async ({ request, cookies }) => {
-		const { profile, key } = await requireUnlockedProfile(cookies);
-		const form = await request.formData();
+	edit: async (event) => {
+		const { profile, key } = await requireUnlockedProfile(event, PERMISSIONS.write);
+		const form = await event.request.formData();
 		const id = Number(form.get('id'));
 		const fields = expenseFields(form);
 		if (!Number.isInteger(id) || !fields.valid) {
@@ -156,8 +162,8 @@ export const actions: Actions = {
 	 * list, then one to file each expense under it. Only the rows the model both
 	 * answered for and actually moved are written.
 	 */
-	categorise: async ({ cookies }) => {
-		const { profile, key } = await requireUnlockedProfile(cookies);
+	categorise: async (event) => {
+		const { profile, key } = await requireUnlockedProfile(event, PERMISSIONS.write);
 		const expenses = openExpenses(key, await expensesFor(profile.id));
 		if (!expenses.length) return fail(400, { message: 'There are no expenses to categorise yet.' });
 
@@ -189,9 +195,9 @@ export const actions: Actions = {
 				: `Categories already match what the model suggested${skipped}.`
 		};
 	},
-	toggle: async ({ request, cookies }) => {
-		const { profile } = await requireUnlockedProfile(cookies);
-		const id = Number((await request.formData()).get('id'));
+	toggle: async (event) => {
+		const { profile } = await requireUnlockedProfile(event, PERMISSIONS.write);
+		const id = Number((await event.request.formData()).get('id'));
 		if (!Number.isInteger(id)) return fail(400);
 		await execute(
 			'UPDATE expenses SET active = CASE active WHEN 1 THEN 0 ELSE 1 END WHERE id = ? AND profile_id = ?',
@@ -200,9 +206,9 @@ export const actions: Actions = {
 		return { success: true };
 	},
 	/** Required is a plaintext column like `active`, so this needs no data key. */
-	toggleRequired: async ({ request, cookies }) => {
-		const { profile } = await requireUnlockedProfile(cookies);
-		const id = Number((await request.formData()).get('id'));
+	toggleRequired: async (event) => {
+		const { profile } = await requireUnlockedProfile(event, PERMISSIONS.write);
+		const id = Number((await event.request.formData()).get('id'));
 		if (!Number.isInteger(id)) return fail(400);
 		await execute(
 			'UPDATE expenses SET required = CASE required WHEN 1 THEN 0 ELSE 1 END WHERE id = ? AND profile_id = ?',
@@ -210,16 +216,16 @@ export const actions: Actions = {
 		);
 		return { success: true };
 	},
-	delete: async ({ request, cookies }) => {
-		const { profile } = await requireUnlockedProfile(cookies);
-		const id = Number((await request.formData()).get('id'));
+	delete: async (event) => {
+		const { profile } = await requireUnlockedProfile(event, PERMISSIONS.write);
+		const id = Number((await event.request.formData()).get('id'));
 		if (!Number.isInteger(id)) return fail(400);
 		await execute('DELETE FROM expenses WHERE id = ? AND profile_id = ?', [id, profile.id]);
 		return { success: true };
 	},
-	import: async ({ request, cookies }) => {
-		const { profile, key } = await requireUnlockedProfile(cookies);
-		const upload = (await request.formData()).get('csv');
+	import: async (event) => {
+		const { profile, key } = await requireUnlockedProfile(event, PERMISSIONS.write);
+		const upload = (await event.request.formData()).get('csv');
 		if (!(upload instanceof File) || !upload.size)
 			return fail(400, { message: 'Choose a CSV file to import.' });
 		if (upload.size > 2_000_000)
@@ -362,9 +368,9 @@ export const actions: Actions = {
 		const imported = statements.length;
 		return { imported, message: `${imported} recurring expenses imported.` };
 	},
-	settings: async ({ request, cookies }) => {
-		const { profile, key } = await requireUnlockedProfile(cookies);
-		const form = await request.formData();
+	settings: async (event) => {
+		const { profile, key } = await requireUnlockedProfile(event, PERMISSIONS.write);
+		const form = await event.request.formData();
 		const amount = Number(form.get('payment_amount'));
 		const anchor = String(form.get('payday_anchor_date') ?? '');
 		const cycleType = String(form.get('cycle_type')) as PaymentCycleType;
@@ -383,9 +389,9 @@ export const actions: Actions = {
 		);
 		return { message: 'Payment schedule updated.' };
 	},
-	setPasscode: async ({ request, cookies }) => {
-		const record = await requireProfile(cookies);
-		const form = await request.formData();
+	setPasscode: async (event) => {
+		const record = await requireProfile(event, PERMISSIONS.write);
+		const form = await event.request.formData();
 		const passcode = String(form.get('passcode') ?? '');
 		const confirmation = String(form.get('confirm') ?? '');
 
@@ -437,18 +443,18 @@ export const actions: Actions = {
 
 		forgetProfileSessions(record.id);
 		clearFailures(record.id);
-		startUnlockSession(cookies, record.id, dataKey);
+		startUnlockSession(event.cookies, record.id, record.owner_sub, dataKey);
 		return { message: 'Passcode set. This profile is now encrypted.' };
 	},
-	removePasscode: async ({ request, cookies }) => {
-		const record = await requireProfile(cookies);
+	removePasscode: async (event) => {
+		const record = await requireProfile(event, PERMISSIONS.write);
 		if (!record.passcode_salt || !record.passcode_key)
 			return fail(400, { message: 'This profile does not have a passcode.' });
 
 		const waitFor = throttledFor(record.id);
 		if (waitFor) return fail(429, { message: `Too many attempts. Try again in ${waitFor}s.` });
 
-		const passcode = String((await request.formData()).get('passcode') ?? '');
+		const passcode = String((await event.request.formData()).get('passcode') ?? '');
 		const dataKey = PASSCODE_PATTERN.test(passcode)
 			? await unwrapDataKey(passcode, record.passcode_salt, record.passcode_key)
 			: null;
@@ -500,11 +506,11 @@ export const actions: Actions = {
 
 		forgetProfileSessions(record.id);
 		clearFailures(record.id);
-		endUnlockSession(cookies);
+		endUnlockSession(event.cookies);
 		return { message: 'Passcode removed. This profile is no longer encrypted.' };
 	},
-	lock: async ({ cookies }) => {
-		endUnlockSession(cookies);
+	lock: async (event) => {
+		endUnlockSession(event.cookies);
 		redirect(303, '/unlock');
 	}
 };

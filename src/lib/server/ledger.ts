@@ -1,5 +1,5 @@
-import type { Cookies } from '@sveltejs/kit';
 import { queryOne } from './db';
+import type { AuthContext } from './auth';
 import { advancePastDueExpenses } from './due-dates';
 import { expensesFor } from './expenses';
 import { requireUnlockedProfile } from './profile';
@@ -15,8 +15,8 @@ const SETTINGS_SQL =
  * sees the same anchor dates. Shared by the dashboard and the deep dives, which
  * differ only in what they derive from it.
  */
-export async function loadLedger(cookies: Cookies) {
-	const { profile, key } = await requireUnlockedProfile(cookies);
+export async function loadLedger(context: AuthContext) {
+	const { profile, key } = await requireUnlockedProfile(context);
 	await advancePastDueExpenses(profile.id);
 	const expenses = openExpenses(key, await expensesFor(profile.id));
 	const settings = openSettings(key, (await queryOne<SettingsRow>(SETTINGS_SQL, [profile.id]))!);

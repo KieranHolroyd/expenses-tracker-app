@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { LogOut } from '@lucide/svelte';
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import CreateProfileDialog from '$lib/components/CreateProfileDialog.svelte';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
@@ -20,6 +21,17 @@
 			<span class="bg-coral grid size-10 place-items-center rounded-md font-serif text-2xl">L</span>
 			Ledgerly
 		</a>
+		<div class="ml-auto flex items-center gap-4 text-sm">
+			<span class="hidden text-[#a3a3a3] sm:inline">{data.account.name}</span>
+			<form method="POST" action="/auth/logout">
+				<button
+					type="submit"
+					class="flex items-center gap-2 rounded-lg px-3 py-2 font-semibold text-[#a3a3a3] transition-colors hover:bg-[#1f1f1f] hover:text-white"
+				>
+					<LogOut size={16} /> Sign out
+				</button>
+			</form>
+		</div>
 	</header>
 
 	<section

@@ -55,6 +55,7 @@
 		"@lucide/svelte": "^1.28.0",
 		"@tanstack/table-core": "^8.21.3",
 		"csv-parse": "^7.0.2",
-		"d3": "^7.9.0"
+		"d3": "^7.9.0",
+		"jose": "^6.2.9"
 	}
 }

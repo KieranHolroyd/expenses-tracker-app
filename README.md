@@ -14,6 +14,60 @@ With no Turso credentials set, the app falls back to a local SQLite file at `dat
 development needs no setup. The seed command is idempotent and restores the starter
 recurring-expense rows without deleting user-added data.
 
+With no `ORIGIN` set either, sign-in is stubbed out and the app runs as a fully granted local
+operator — see below.
+
+## Sign-in
+
+Identity comes from [Holroyd ID](https://auth.holroydnet.uk), over a standard OIDC
+authorization-code flow with PKCE. Ledgerly stores no users and no passwords.
+
+**There is nothing to configure.** On boot it registers itself with the provider as `ledgerly` and
+receives a public client — no client id to copy, no secret to rotate. What authorises that is where
+it lives: the provider accepts a tokenless registration when the redirect URI is on a trusted
+domain. So `ORIGIN` is the only setting sign-in needs; the provider's address is derived from it
+(`ledgerly.holroydnet.uk` implies `auth.holroydnet.uk`) and so is the callback. `.env.example`
+lists the optional overrides for everything else.
+
+Registering does not let anyone in. A new application is closed to every account until an
+administrator grants it, so **grant yourself Ledgerly in the Holroyd ID admin UI** before the first
+sign-in — until then the provider bounces you to its own `/denied` page.
+
+Two roles, declared by Ledgerly and enforced against permissions rather than role names:
+
+| Role     | Permissions                       | Can                                                                                                            |
+| -------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `viewer` | `expenses:read`                   | Read profiles, expenses, insights, forecasts, and export CSV                                                   |
+| `editor` | `expenses:read`, `expenses:write` | All of the above, plus add, edit, import and delete, change the payment schedule, and set or remove a passcode |
+
+Access is re-checked against the provider every 5 minutes, so revoking a grant takes effect within
+that window rather than when the local session expires. Sessions last 7 days, live in the `sessions`
+table, and the browser holds nothing but an opaque token.
+
+In development, running without `ORIGIN` gives a stub session with both permissions, so `pnpm dev`
+works with no provider. That bypass is unreachable in production: without a usable client there,
+nobody gets a session at all.
+
+### Profiles, accounts and passcodes
+
+These are three different things, and it is worth keeping them apart:
+
+- **Your account** is your Holroyd ID. It decides _whose_ profiles you see — every profile belongs
+  to the account that created it, and lookups are scoped by owner, so another account's profile id
+  simply does not resolve.
+- **A profile** is a personal space with its own expenses and payment schedule. One account can have
+  up to eight.
+- **A passcode** encrypts a profile's rows. It is unrelated to signing in: Holroyd ID never sees it,
+  the key exists only in the server process, and nothing — not a session, not an admin, not the
+  database — can recover it if forgotten.
+
+Signing out drops the unlock session as well as the login session, so it gives up the decryption
+keys too.
+
+A database that predates sign-in has profiles with no owner. The first account to sign in adopts
+them, once, and only while nothing is owned yet — so nobody can later help themselves to somebody
+else's data.
+
 ## Database
 
 Ledgerly stores its data in [Turso](https://turso.tech) over libSQL. Create a database and a token:
